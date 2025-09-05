@@ -1,0 +1,24 @@
+{
+  "name": "cf-notepad",
+  "version": "1.0.0",
+  "description": "基于 Cloudflare Workers 的网络粘贴板应用",
+  "main": "worker.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "kv:create": "wrangler kv:namespace create NOTEPAD_KV",
+    "kv:create-preview": "wrangler kv:namespace create NOTEPAD_KV --preview"
+  },
+  "keywords": [
+    "cloudflare",
+    "workers",
+    "notepad",
+    "pastebin",
+    "kv"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}
