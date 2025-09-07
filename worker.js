@@ -163,23 +163,18 @@ function escapeJavaScript(text) {
     return '';
   }
 
-  const map = {
-    '\\': '\\\\',
-    '"': '\\"',
-    "'": "\\'",
-    '\n': '\\n',
-    '\r': '\\r',
-    '\t': '\\t',
-    '\b': '\\b',
-    '\f': '\\f',
-    '\v': '\\v',
-    '\0': '\\0',
-    '`': '\\`'
-  };
-
-  return text.replace(/[\\"'\n\r\t\b\f\v\0`]/g, function(s) {
-    return map[s];
-  });
+  // 对于简单的 ID 字符串，只需要转义引号和反斜杠
+  // 对于内容字符串，需要转义换行符等
+  return text
+    .replace(/\\/g, '\\\\')   // 反斜杠必须首先处理
+    .replace(/"/g, '\\"')     // 双引号
+    .replace(/'/g, "\\'")     // 单引号
+    .replace(/\n/g, '\\n')    // 换行符
+    .replace(/\r/g, '\\r')    // 回车符
+    .replace(/\t/g, '\\t')    // 制表符
+    .replace(/\f/g, '\\f')    // 换页符
+    .replace(/\v/g, '\\v')    // 垂直制表符
+    .replace(/`/g, '\\`');    // 反引号
 }
 
 // 输入验证函数
@@ -441,19 +436,19 @@ async function handleRequest(request) {
 
   // 分享链接路由
   if (path.startsWith('/share/')) {
-    const shareToken = path.split('/')[2];
+    const shareToken = decodeURIComponent(path.split('/')[2]);
     return handleShareView(shareToken);
   }
 
   // 文档编辑路由
   if (path.startsWith('/edit/')) {
-    const docId = path.split('/')[2];
+    const docId = decodeURIComponent(path.split('/')[2]);
     return handleEditView(docId, request);
   }
 
   // 直接文档访问路由 - 放在最后以避免与其他路由冲突
   if (path.length > 1 && !path.includes('.')) {
-    const docName = path.substring(1); // 移除开头的 '/'
+    const docName = decodeURIComponent(path.substring(1)); // 移除开头的 '/'
     if (isValidDocName(docName)) {
       return handleDirectDocAccess(docName, request);
     }
@@ -491,7 +486,7 @@ async function handleAuthAPI(request, path, method) {
   }
 
   if (path.startsWith('/api/auth/verify-doc/') && method === 'POST') {
-    const docName = path.split('/')[4];
+    const docName = decodeURIComponent(path.split('/')[4]);
     return handleVerifyDocPassword(docName, request);
   }
 
@@ -522,22 +517,22 @@ async function handleAdminAPI(request, path, method) {
   }
 
   if (path.startsWith('/api/admin/documents/') && method === 'GET') {
-    const docId = path.split('/')[4];
+    const docId = decodeURIComponent(path.split('/')[4]);
     return handleGetDocument(docId);
   }
 
   if (path.startsWith('/api/admin/documents/') && method === 'PUT') {
-    const docId = path.split('/')[4];
+    const docId = decodeURIComponent(path.split('/')[4]);
     return handleUpdateDocument(docId, request);
   }
 
   if (path.startsWith('/api/admin/documents/') && method === 'DELETE') {
-    const docId = path.split('/')[4];
+    const docId = decodeURIComponent(path.split('/')[4]);
     return handleDeleteDocument(docId);
   }
 
   if (path.startsWith('/api/admin/documents/') && path.endsWith('/share') && method === 'POST') {
-    const docId = path.split('/')[4];
+    const docId = decodeURIComponent(path.split('/')[4]);
     return handleCreateShare(docId);
   }
 
@@ -550,17 +545,17 @@ async function handleAdminAPI(request, path, method) {
 // 公开API处理（根据文档权限验证）
 async function handlePublicAPI(request, path, method) {
   if (path.startsWith('/api/public/doc/') && method === 'GET') {
-    const docName = path.split('/')[4];
+    const docName = decodeURIComponent(path.split('/')[4]);
     return handleGetDocByName(docName, request);
   }
 
   if (path.startsWith('/api/public/share/') && method === 'GET') {
-    const shareToken = path.split('/')[4];
+    const shareToken = decodeURIComponent(path.split('/')[4]);
     return handleGetSharedDoc(shareToken, request);
   }
 
   if (path.startsWith('/api/public/documents/') && method === 'PUT') {
-    const docName = path.split('/')[4];
+    const docName = decodeURIComponent(path.split('/')[4]);
     return handleUpdateDocumentByName(docName, request);
   }
 
@@ -585,13 +580,13 @@ async function handleLegacyAPI(request, path, method) {
 
   // 文档直接访问API重定向到新API
   if (path.startsWith('/api/doc/') && method === 'GET') {
-    const docName = path.split('/')[3];
-    return handlePublicAPI(request, `/api/public/doc/${docName}`, method);
+    const docName = decodeURIComponent(path.split('/')[3]);
+    return handlePublicAPI(request, `/api/public/doc/${encodeURIComponent(docName)}`, method);
   }
 
   if (path.startsWith('/api/doc/') && path.endsWith('/verify') && method === 'POST') {
-    const docName = path.split('/')[3];
-    return handleAuthAPI(request, `/api/auth/verify-doc/${docName}`, method);
+    const docName = decodeURIComponent(path.split('/')[3]);
+    return handleAuthAPI(request, `/api/auth/verify-doc/${encodeURIComponent(docName)}`, method);
   }
 
   // 管理员API重定向到新API
@@ -1547,17 +1542,18 @@ function getMainScript() {
                     return '';
                 }
 
-                return text.replace(/\\\\/g, '\\\\\\\\')
-                          .replace(/"/g, '\\\\"')
-                          .replace(/'/g, "\\\\'")
-                          .replace(/\\n/g, '\\\\n')
-                          .replace(/\\r/g, '\\\\r')
-                          .replace(/\\t/g, '\\\\t')
-                          .replace(/\\b/g, '\\\\b')
-                          .replace(/\\f/g, '\\\\f')
-                          .replace(/\\v/g, '\\\\v')
-                          .replace(/\\0/g, '\\\\0')
-                          .replace(/\`/g, '\\\\\`');
+                // 对于简单的 ID 字符串，只需要转义引号和反斜杠
+                return text
+                    .replace(/\\\\/g, '\\\\\\\\')
+                    .replace(/"/g, '\\\\"')
+                    .replace(/'/g, "\\\\'")
+                    .replace(/\\n/g, '\\\\n')
+                    .replace(/\\r/g, '\\\\r')
+                    .replace(/\\t/g, '\\\\t')
+                    .replace(/\\f/g, '\\\\f')
+                    .replace(/\\v/g, '\\\\v')
+                    .replace(/\\0/g, '\\\\0')
+                    .replace(/\`/g, '\\\\\`');
             }
 
             listElement.innerHTML = documents.map(doc => {
