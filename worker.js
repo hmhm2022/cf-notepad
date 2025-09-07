@@ -4,47 +4,132 @@
  * 使用模板字符串避免复杂的字符串拼接问题
  */
 
-// 配置常量
+// ==================== 统一配置管理 ====================
+
+// 统一配置对象
+const APP_CONFIG = {
+  // 安全配置
+  SECURITY: {
+    // 密码从环境变量读取，不提供默认值以确保安全性
+    get ADMIN_PASSWORD() {
+      return globalThis.ADMIN_PASSWORD;
+    },
+    MAX_LOGIN_ATTEMPTS: 5, // 每小时最大尝试次数
+    ATTEMPT_WINDOW: 60 * 60 * 1000, // 尝试次数重置窗口1小时
+  },
+
+  // 会话配置
+  SESSION: {
+    ADMIN_DURATION: 24 * 60 * 60 * 1000,    // 管理员会话24小时
+    GUEST_DURATION: 60 * 60 * 1000,         // 访客会话1小时
+  },
+
+  // 文档配置
+  DOCUMENT: {
+    DEFAULT_EXPIRY: 7 * 24 * 60 * 60 * 1000, // 默认过期时间7天
+  },
+
+  // 权限类型定义
+  PERMISSION_TYPES: {
+    ADMIN: 'admin',      // 管理员：可操作所有文档
+    GUEST: 'guest'       // 访客：只能访问有权限的文档
+  },
+
+  // 文档访问级别
+  DOC_ACCESS_LEVELS: {
+    PUBLIC_READ: 'public_read',       // 公开只读
+    PUBLIC_WRITE: 'public_write',     // 公开可编辑
+    PASSWORD_READ: 'password_read',   // 密码保护只读
+    PASSWORD_WRITE: 'password_write', // 密码保护可编辑
+    PRIVATE: 'private'                // 仅管理员可访问
+  },
+
+  // 用户权限级别
+  PERMISSION_LEVELS: {
+    READ: 'read',
+    WRITE: 'write',
+    ADMIN: 'admin'
+  }
+};
+
+// 向后兼容的配置别名
 const CONFIG = {
-  PASSWORD: 'CloudflareNotepad2024!',
-  SESSION_DURATION: 24 * 60 * 60 * 1000,
-  DEFAULT_EXPIRY: 7 * 24 * 60 * 60 * 1000,
-  DOC_SESSION_DURATION: 60 * 60 * 1000, // 文档访问会话1小时
-  MAX_LOGIN_ATTEMPTS: 5, // 每小时最大尝试次数
-  ATTEMPT_WINDOW: 60 * 60 * 1000, // 尝试次数重置窗口1小时
+  get PASSWORD() { return APP_CONFIG.SECURITY.ADMIN_PASSWORD; },
+  get DEFAULT_EXPIRY() { return APP_CONFIG.DOCUMENT.DEFAULT_EXPIRY; },
+  get MAX_LOGIN_ATTEMPTS() { return APP_CONFIG.SECURITY.MAX_LOGIN_ATTEMPTS; },
+  get ATTEMPT_WINDOW() { return APP_CONFIG.SECURITY.ATTEMPT_WINDOW; }
 };
 
-// ==================== 权限模型定义 ====================
+const PERMISSION_TYPES = APP_CONFIG.PERMISSION_TYPES;
+const DOC_ACCESS_LEVELS = APP_CONFIG.DOC_ACCESS_LEVELS;
+const PERMISSION_LEVELS = APP_CONFIG.PERMISSION_LEVELS;
+const SESSION_CONFIG = APP_CONFIG.SESSION;
 
-// 用户类型定义
-const PERMISSION_TYPES = {
-  ADMIN: 'admin',      // 管理员：可操作所有文档
-  GUEST: 'guest'       // 访客：只能访问有权限的文档
-};
+// ==================== 通用文档操作函数 ====================
 
-// 文档访问级别
-const DOC_ACCESS_LEVELS = {
-  PUBLIC_READ: 'public_read',       // 公开只读
-  PUBLIC_WRITE: 'public_write',     // 公开可编辑
-  PASSWORD_READ: 'password_read',   // 密码保护只读
-  PASSWORD_WRITE: 'password_write', // 密码保护可编辑
-  PRIVATE: 'private'                // 仅管理员可访问
-};
+// 通用文档获取函数 - 优化重复的KV查询模式
+async function getDocumentByName(docName) {
+  try {
+    // 先通过名称获取文档ID
+    const docId = await NOTEPAD_KV.get('name_' + docName);
+    if (!docId) {
+      return { success: false, error: 'Document not found', code: 404 };
+    }
 
-// 用户权限级别
-const PERMISSION_LEVELS = {
-  READ: 'read',
-  WRITE: 'write',
-  ADMIN: 'admin'
-};
+    // 再获取文档数据
+    const docData = await NOTEPAD_KV.get('doc_' + docId);
+    if (!docData) {
+      return { success: false, error: 'Document not found', code: 404 };
+    }
 
-// 会话配置
-const SESSION_CONFIG = {
-  ADMIN_DURATION: 24 * 60 * 60 * 1000,    // 管理员会话24小时
-  GUEST_DURATION: 60 * 60 * 1000,         // 访客会话1小时
-};
+    // 解析文档数据
+    const document = safeJsonParse(docData);
+    if (!document || !document.id) {
+      return { success: false, error: 'Document not found', code: 404 };
+    }
 
-// 工具函数
+    return { success: true, document, docId };
+  } catch (error) {
+    console.error('Error getting document by name:', error);
+    return { success: false, error: 'Internal server error', code: 500 };
+  }
+}
+
+// 通用文档获取函数 - 通过ID获取
+async function getDocumentById(docId) {
+  try {
+    const docData = await NOTEPAD_KV.get('doc_' + docId);
+    if (!docData) {
+      return { success: false, error: 'Document not found', code: 404 };
+    }
+
+    const document = safeJsonParse(docData);
+    if (!document || !document.id) {
+      return { success: false, error: 'Document not found', code: 404 };
+    }
+
+    return { success: true, document };
+  } catch (error) {
+    console.error('Error getting document by ID:', error);
+    return { success: false, error: 'Internal server error', code: 500 };
+  }
+}
+
+// 更新文档访问统计
+async function updateDocumentStats(docId, document) {
+  try {
+    document.viewCount = (document.viewCount || 0) + 1;
+    document.lastViewedAt = Date.now();
+    await NOTEPAD_KV.put('doc_' + docId, JSON.stringify(document));
+    return true;
+  } catch (error) {
+    console.error('Error updating document stats:', error);
+    return false;
+  }
+}
+
+// ==================== 工具函数 ====================
+
 function generateId() {
   // 使用更安全的随机ID生成
   return generateSecureId(24);
@@ -52,13 +137,6 @@ function generateId() {
 
 function generateShareToken() {
   return 'share_' + generateSecureId(12);
-}
-
-function isValidSession(sessionData) {
-  if (!sessionData) return false;
-  const session = safeJsonParse(sessionData);
-  if (!session || !session.timestamp) return false;
-  return Date.now() - session.timestamp < CONFIG.SESSION_DURATION;
 }
 
 // 验证文档名称格式
@@ -632,7 +710,20 @@ async function handleLogin(request) {
       });
     }
 
-    if (password === CONFIG.PASSWORD) {
+    // 检查是否设置了管理员密码
+    const adminPassword = CONFIG.PASSWORD;
+    if (!adminPassword) {
+      console.error('ADMIN_PASSWORD environment variable is not set');
+      return new Response(JSON.stringify({
+        success: false,
+        error: '请检查 `ADMIN_PASSWORD` 环境变量设置'
+      }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (password === adminPassword) {
       const sessionToken = generateId();
       const sessionData = createSession(PERMISSION_TYPES.ADMIN);
 
@@ -947,25 +1038,16 @@ async function handleUpdateDocumentByName(docName, request) {
       });
     }
 
-    // 通过名称查找文档ID
-    const docId = await NOTEPAD_KV.get('name_' + docName);
-    if (!docId) {
-      return new Response(JSON.stringify({ error: 'Document not found' }), {
-        status: 404,
+    // 使用通用文档获取函数
+    const result = await getDocumentByName(docName);
+    if (!result.success) {
+      return new Response(JSON.stringify({ error: result.error }), {
+        status: result.code,
         headers: { 'Content-Type': 'application/json' }
       });
     }
 
-    // 获取文档数据
-    const docData = await NOTEPAD_KV.get('doc_' + docId);
-    if (!docData) {
-      return new Response(JSON.stringify({ error: 'Document not found' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    const document = JSON.parse(docData);
+    const { document, docId } = result;
 
     // 验证用户权限
     const session = await validateSession(request);
@@ -1088,29 +1170,16 @@ async function handleGetSharedDoc(shareToken) {
 
 // 通过名称获取文档（用于直接访问）
 async function handleGetDocByName(docName, request) {
-  const docId = await NOTEPAD_KV.get('name_' + docName);
-  if (!docId) {
-    return new Response(JSON.stringify({ error: 'Document not found' }), {
-      status: 404,
+  // 使用通用文档获取函数
+  const result = await getDocumentByName(docName);
+  if (!result.success) {
+    return new Response(JSON.stringify({ error: result.error }), {
+      status: result.code,
       headers: { 'Content-Type': 'application/json' }
     });
   }
 
-  const docData = await NOTEPAD_KV.get('doc_' + docId);
-  if (!docData) {
-    return new Response(JSON.stringify({ error: 'Document not found' }), {
-      status: 404,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-
-  const document = safeJsonParse(docData);
-  if (!document || !document.id) {
-    return new Response(JSON.stringify({ error: 'Document not found' }), {
-      status: 404,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
+  const { document, docId } = result;
 
   // 获取用户会话
   const session = await validateSession(request);
@@ -1135,10 +1204,8 @@ async function handleGetDocByName(docName, request) {
   if (canRead(permission)) {
     response.content = document.content || '';
 
-    // 更新访问统计
-    document.viewCount = (document.viewCount || 0) + 1;
-    document.lastViewedAt = Date.now();
-    await NOTEPAD_KV.put('doc_' + docId, JSON.stringify(document));
+    // 使用通用函数更新访问统计
+    await updateDocumentStats(docId, document);
   }
 
   return new Response(JSON.stringify(response), {
@@ -1151,13 +1218,16 @@ async function handleVerifyDocPassword(docName, request) {
   const { password } = await request.json();
   const ip = getClientIP(request);
 
-  const docId = await NOTEPAD_KV.get('name_' + docName);
-  if (!docId) {
+  // 使用通用文档获取函数
+  const result = await getDocumentByName(docName);
+  if (!result.success) {
     return new Response(JSON.stringify({ error: 'Invalid credentials' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' }
     });
   }
+
+  const { document, docId } = result;
 
   // 检查尝试次数
   const canAttempt = await checkLoginAttempts(ip, docId);
@@ -1166,24 +1236,6 @@ async function handleVerifyDocPassword(docName, request) {
       error: '尝试次数过多，请稍后再试'
     }), {
       status: 429,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-
-  const docData = await NOTEPAD_KV.get('doc_' + docId);
-  if (!docData) {
-    await recordLoginAttempt(ip, docId);
-    return new Response(JSON.stringify({ error: 'Invalid credentials' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-
-  const document = safeJsonParse(docData);
-  if (!document || !document.id) {
-    await recordLoginAttempt(ip, docId);
-    return new Response(JSON.stringify({ error: 'Invalid credentials' }), {
-      status: 401,
       headers: { 'Content-Type': 'application/json' }
     });
   }
@@ -1214,10 +1266,8 @@ async function handleVerifyDocPassword(docName, request) {
     expirationTtl: SESSION_CONFIG.GUEST_DURATION / 1000
   });
 
-  // 更新访问统计
-  document.viewCount = (document.viewCount || 0) + 1;
-  document.lastViewedAt = Date.now();
-  await NOTEPAD_KV.put('doc_' + docId, JSON.stringify(document));
+  // 使用通用函数更新访问统计
+  await updateDocumentStats(docId, document);
 
   return new Response(JSON.stringify({
     success: true,
@@ -1238,30 +1288,16 @@ async function handleVerifyDocPassword(docName, request) {
 
 // 直接文档访问处理
 async function handleDirectDocAccess(docName, request) {
-  // 获取文档信息
-  const docId = await NOTEPAD_KV.get('name_' + docName);
-  if (!docId) {
+  // 使用通用文档获取函数
+  const result = await getDocumentByName(docName);
+  if (!result.success) {
     return new Response(get404HTML(), {
       status: 404,
       headers: { 'Content-Type': 'text/html' }
     });
   }
 
-  const docData = await NOTEPAD_KV.get('doc_' + docId);
-  if (!docData) {
-    return new Response(get404HTML(), {
-      status: 404,
-      headers: { 'Content-Type': 'text/html' }
-    });
-  }
-
-  const document = safeJsonParse(docData);
-  if (!document || !document.id) {
-    return new Response(get404HTML(), {
-      status: 404,
-      headers: { 'Content-Type': 'text/html' }
-    });
-  }
+  const { document, docId } = result;
 
   // 使用统一的会话验证系统
   const session = await validateSession(request);
@@ -1269,10 +1305,8 @@ async function handleDirectDocAccess(docName, request) {
 
   // 如果有读取权限，直接显示文档
   if (canRead(permission)) {
-    // 更新访问统计
-    document.viewCount = (document.viewCount || 0) + 1;
-    document.lastViewedAt = Date.now();
-    await NOTEPAD_KV.put('doc_' + docId, JSON.stringify(document));
+    // 使用通用函数更新访问统计
+    await updateDocumentStats(docId, document);
 
     return new Response(getDirectDocHTML(document, permission), {
       headers: { 'Content-Type': 'text/html' }
@@ -1302,15 +1336,15 @@ async function handleShareView(shareToken) {
 
 // 编辑页面视图
 async function handleEditView(docId, request) {
-  const sessionToken = getCookieValue(request.headers.get('Cookie'), 'sessionToken');
-  const sessionData = sessionToken ? await NOTEPAD_KV.get('session_' + sessionToken) : null;
-  
-  if (!isValidSession(sessionData)) {
+  // 使用统一的会话验证系统
+  const session = await validateSession(request);
+
+  if (!session) {
     return new Response(getMainHTML(), {
       headers: { 'Content-Type': 'text/html' }
     });
   }
-  
+
   return new Response(getEditHTML(docId), {
     headers: { 'Content-Type': 'text/html' }
   });
@@ -1322,7 +1356,106 @@ function getCookieValue(cookieString, name) {
   return match ? match[2] : null;
 }
 
-// HTML 页面生成函数
+// ==================== 公共前端工具函数库 ====================
+
+// 生成公共JavaScript工具函数
+function getCommonJavaScript() {
+  return `
+    // 公共工具函数库
+    window.CFNotepadUtils = {
+      // Cookie操作
+      getCookie: function(name) {
+        const value = "; " + document.cookie;
+        const parts = value.split("; " + name + "=");
+        if (parts.length === 2) return parts.pop().split(";").shift();
+        return null;
+      },
+
+      setCookie: function(name, value, days = 7) {
+        const expires = new Date();
+        expires.setTime(expires.getTime() + (days * 24 * 60 * 60 * 1000));
+        document.cookie = name + "=" + value + ";expires=" + expires.toUTCString() + ";path=/";
+      },
+
+      // 会话管理
+      getSessionToken: function() {
+        return localStorage.getItem("sessionToken") || this.getCookie("sessionToken");
+      },
+
+      setSessionToken: function(token) {
+        localStorage.setItem("sessionToken", token);
+        this.setCookie("sessionToken", token);
+      },
+
+      clearSession: function() {
+        localStorage.removeItem("sessionToken");
+        document.cookie = "sessionToken=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+      },
+
+      // API调用
+      apiCall: async function(endpoint, options = {}) {
+        const sessionToken = this.getSessionToken();
+        const headers = {
+          "Content-Type": "application/json",
+          ...options.headers
+        };
+
+        if (sessionToken) {
+          headers["X-Session-Token"] = sessionToken;
+        }
+
+        const response = await fetch(endpoint, {
+          ...options,
+          headers
+        });
+
+        if (response.status === 401) {
+          this.clearSession();
+          window.location.reload();
+          return;
+        }
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+          throw new Error(errorData.error || "HTTP " + response.status + ": " + response.statusText);
+        }
+
+        return response;
+      },
+
+      // 错误处理
+      showError: function(message) {
+        alert("错误: " + message);
+      },
+
+      showSuccess: function(message) {
+        alert("成功: " + message);
+      },
+
+      // HTML转义
+      escapeHtml: function(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+      },
+
+      // JavaScript字符串转义
+      escapeJavaScript: function(text) {
+        if (typeof text !== 'string') return '';
+        return text
+          .replace(/\\\\/g, '\\\\\\\\')
+          .replace(/'/g, "\\\\'")
+          .replace(/"/g, '\\\\"')
+          .replace(/\\n/g, '\\\\n')
+          .replace(/\\r/g, '\\\\r')
+          .replace(/\\t/g, '\\\\t');
+      }
+    };
+  `;
+}
+
+// ==================== HTML 页面生成函数 ====================
+
 function getMainHTML() {
   return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -1459,6 +1592,7 @@ function getMainHTML() {
         </div>
     </div>
 
+    <script>${getCommonJavaScript()}</script>
     ${getMainScript()}
 </body>
 </html>`;
@@ -1466,14 +1600,9 @@ function getMainHTML() {
 
 function getMainScript() {
   return `<script>
-    let sessionToken = localStorage.getItem("sessionToken") || getCookie("sessionToken");
-
-    function getCookie(name) {
-        const value = "; " + document.cookie;
-        const parts = value.split("; " + name + "=");
-        if (parts.length === 2) return parts.pop().split(";").shift();
-        return null;
-    }
+    // 使用公共工具函数库
+    const utils = window.CFNotepadUtils;
+    let sessionToken = utils.getSessionToken();
 
     function checkSession() {
         if (sessionToken) {
@@ -1486,36 +1615,18 @@ function getMainScript() {
         }
     }
 
+    // 使用公共工具函数的API调用
     async function apiCall(endpoint, options = {}) {
-        const headers = {
-            "Content-Type": "application/json",
-            ...options.headers
-        };
-
-        if (sessionToken) {
-            headers["X-Session-Token"] = sessionToken;
+        try {
+            return await utils.apiCall(endpoint, options);
+        } catch (error) {
+            // 如果是会话过期，重新获取token并检查会话
+            if (error.message.includes("Session expired") || error.message.includes("401")) {
+                sessionToken = utils.getSessionToken();
+                checkSession();
+            }
+            throw error;
         }
-
-        const response = await fetch(endpoint, {
-            ...options,
-            headers
-        });
-
-        if (response.status === 401) {
-            sessionToken = null;
-            localStorage.removeItem("sessionToken");
-            document.cookie = "sessionToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-            checkSession();
-            throw new Error("Session expired");
-        }
-
-        // 检查其他错误状态码
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-            throw new Error(errorData.error || "HTTP " + response.status + ": " + response.statusText);
-        }
-
-        return response;
     }
 
     async function loadDocuments() {
@@ -1529,32 +1640,11 @@ function getMainScript() {
                 return;
             }
 
-            // HTML转义函数
-            function escapeHtml(text) {
-                const div = document.createElement('div');
-                div.textContent = text;
-                return div.innerHTML;
-            }
+            // 使用公共工具函数的HTML转义
+            const escapeHtml = utils.escapeHtml;
 
-            // JavaScript字符串转义函数
-            function escapeJavaScript(text) {
-                if (typeof text !== 'string') {
-                    return '';
-                }
-
-                // 对于简单的 ID 字符串，只需要转义引号和反斜杠
-                return text
-                    .replace(/\\\\/g, '\\\\\\\\')
-                    .replace(/"/g, '\\\\"')
-                    .replace(/'/g, "\\\\'")
-                    .replace(/\\n/g, '\\\\n')
-                    .replace(/\\r/g, '\\\\r')
-                    .replace(/\\t/g, '\\\\t')
-                    .replace(/\\f/g, '\\\\f')
-                    .replace(/\\v/g, '\\\\v')
-                    .replace(/\\0/g, '\\\\0')
-                    .replace(/\`/g, '\\\\\`');
-            }
+            // 使用公共工具函数的JavaScript转义
+            const escapeJavaScript = utils.escapeJavaScript;
 
             listElement.innerHTML = documents.map(doc => {
                 const createdDate = new Date(doc.createdAt).toLocaleString();
@@ -1672,8 +1762,7 @@ function getMainScript() {
 
             if (response.ok && result.success) {
                 sessionToken = result.sessionToken;
-                localStorage.setItem("sessionToken", sessionToken);
-                document.cookie = "sessionToken=" + sessionToken + "; path=/; max-age=86400";
+                utils.setSessionToken(sessionToken);
                 errorDiv.classList.add("hidden");
                 checkSession();
             } else {
@@ -1870,44 +1959,23 @@ function getEditHTML(docId) {
         </div>
     </main>
 
+    <script>${getCommonJavaScript()}</script>
     <script>
         const docId = "${escapeJavaScript(docId)}";
-        let sessionToken = localStorage.getItem("sessionToken") || getCookie("sessionToken");
+        const utils = window.CFNotepadUtils;
+        let sessionToken = utils.getSessionToken();
 
-        function getCookie(name) {
-            const value = "; " + document.cookie;
-            const parts = value.split("; " + name + "=");
-            if (parts.length === 2) return parts.pop().split(";").shift();
-            return null;
-        }
-
+        // 使用公共工具函数的API调用
         async function apiCall(endpoint, options = {}) {
-            const headers = {
-                "Content-Type": "application/json",
-                ...options.headers
-            };
-
-            if (sessionToken) {
-                headers["X-Session-Token"] = sessionToken;
+            try {
+                return await utils.apiCall(endpoint, options);
+            } catch (error) {
+                if (error.message.includes("Session expired") || error.message.includes("401")) {
+                    window.location.href = "/";
+                    return;
+                }
+                throw error;
             }
-
-            const response = await fetch(endpoint, {
-                ...options,
-                headers
-            });
-
-            if (response.status === 401) {
-                window.location.href = "/";
-                return;
-            }
-
-            // 检查其他错误状态码
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-                throw new Error(errorData.error || "HTTP " + response.status + ": " + response.statusText);
-            }
-
-            return response;
         }
 
         async function loadDocument() {

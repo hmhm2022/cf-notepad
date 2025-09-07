@@ -40,3 +40,4 @@ coverage/
 tmp/
 temp/
 worker-fixed.js
+DEPLOYMENT.md

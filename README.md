@@ -68,16 +68,25 @@ id = "your-production-kv-namespace-id"
 preview_id = "your-preview-kv-namespace-id"
 ```
 
-### 5. 修改密码
+### 5. 设置管理员密码 🔐
 
-在 `worker.js` 文件中修改默认密码：
+**⚠️ 重要安全提醒：** 本项目不提供默认密码，您必须手动设置管理员密码。
 
-```javascript
-const CONFIG = {
-  PASSWORD: 'your-secure-password', // 修改为您的安全密码
-  // ...
-};
+#### 生产环境（推荐）：
+```bash
+# 使用 Cloudflare Workers Secrets 安全设置密码
+wrangler secret put ADMIN_PASSWORD
+# 按提示输入您的安全密码
 ```
+
+#### 开发环境：
+在 `wrangler.toml` 中临时设置（不要提交到版本控制）：
+```toml
+[vars]
+ADMIN_PASSWORD = "your-development-password"
+```
+
+**详细配置说明请参考 [DEPLOYMENT.md](./DEPLOYMENT.md)**
 
 ### 6. 部署应用
 ```bash
