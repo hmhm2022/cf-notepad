@@ -135,10 +135,6 @@ function generateId() {
   return generateSecureId(24);
 }
 
-function generateShareToken() {
-  return 'share_' + generateSecureId(12);
-}
-
 // 验证文档名称格式
 function isValidDocName(name) {
   const validation = validateInput(name, 'docName');
@@ -512,12 +508,6 @@ async function handleRequest(request) {
     return handleAPI(request, path, method);
   }
 
-  // 分享链接路由
-  if (path.startsWith('/share/')) {
-    const shareToken = decodeURIComponent(path.split('/')[2]);
-    return handleShareView(shareToken);
-  }
-
   // 文档编辑路由
   if (path.startsWith('/edit/')) {
     const docId = decodeURIComponent(path.split('/')[2]);
@@ -609,11 +599,6 @@ async function handleAdminAPI(request, path, method) {
     return handleDeleteDocument(docId);
   }
 
-  if (path.startsWith('/api/admin/documents/') && path.endsWith('/share') && method === 'POST') {
-    const docId = decodeURIComponent(path.split('/')[4]);
-    return handleCreateShare(docId);
-  }
-
   return new Response(JSON.stringify({ error: 'API not found' }), {
     status: 404,
     headers: { 'Content-Type': 'application/json' }
@@ -625,11 +610,6 @@ async function handlePublicAPI(request, path, method) {
   if (path.startsWith('/api/public/doc/') && method === 'GET') {
     const docName = decodeURIComponent(path.split('/')[4]);
     return handleGetDocByName(docName, request);
-  }
-
-  if (path.startsWith('/api/public/share/') && method === 'GET') {
-    const shareToken = decodeURIComponent(path.split('/')[4]);
-    return handleGetSharedDoc(shareToken, request);
   }
 
   if (path.startsWith('/api/public/documents/') && method === 'PUT') {
@@ -648,12 +628,6 @@ async function handleLegacyAPI(request, path, method) {
   // 登录接口重定向到新API
   if (path === '/api/login' && method === 'POST') {
     return handleAuthAPI(request, '/api/auth/login', method);
-  }
-
-  // 分享接口重定向到新API
-  if (path.startsWith('/api/share/') && method === 'GET') {
-    const shareToken = path.split('/')[3];
-    return handlePublicAPI(request, `/api/public/share/${shareToken}`, method);
   }
 
   // 文档直接访问API重定向到新API
@@ -1110,64 +1084,6 @@ async function handleDeleteDocument(docId) {
   });
 }
 
-// 创建分享链接
-async function handleCreateShare(docId) {
-  const docData = await NOTEPAD_KV.get('doc_' + docId);
-  if (!docData) {
-    return new Response(JSON.stringify({ error: 'Document not found' }), {
-      status: 404,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-  
-  const shareToken = generateShareToken();
-  const shareData = {
-    docId: docId,
-    createdAt: Date.now()
-  };
-  
-  await NOTEPAD_KV.put('share_' + shareToken, JSON.stringify(shareData));
-  
-  return new Response(JSON.stringify({ 
-    shareToken: shareToken,
-    shareUrl: '/share/' + shareToken
-  }), {
-    headers: { 'Content-Type': 'application/json' }
-  });
-}
-
-// 获取分享的文档
-async function handleGetSharedDoc(shareToken) {
-  const shareData = await NOTEPAD_KV.get('share_' + shareToken);
-  if (!shareData) {
-    return new Response(JSON.stringify({ error: 'Share not found' }), {
-      status: 404,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-  
-  const share = JSON.parse(shareData);
-  const docData = await NOTEPAD_KV.get('doc_' + share.docId);
-  
-  if (!docData) {
-    return new Response(JSON.stringify({ error: 'Document not found' }), {
-      status: 404,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-  
-  const document = JSON.parse(docData);
-  
-  return new Response(JSON.stringify({
-    title: document.title,
-    content: document.content,
-    createdAt: document.createdAt,
-    updatedAt: document.updatedAt
-  }), {
-    headers: { 'Content-Type': 'application/json' }
-  });
-}
-
 // 通过名称获取文档（用于直接访问）
 async function handleGetDocByName(docName, request) {
   // 使用通用文档获取函数
@@ -1323,13 +1239,6 @@ async function handleDirectDocAccess(docName, request) {
   // 其他情况返回404
   return new Response(get404HTML(), {
     status: 404,
-    headers: { 'Content-Type': 'text/html' }
-  });
-}
-
-// 分享页面视图
-async function handleShareView(shareToken) {
-  return new Response(getShareHTML(shareToken), {
     headers: { 'Content-Type': 'text/html' }
   });
 }
@@ -1690,7 +1599,7 @@ function getMainScript() {
                                 <button onclick="editDocument('\${escapeJavaScript(doc.id)}')" class="bg-blue-500 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm">
                                     编辑
                                 </button>
-                                <button onclick="shareDocument('\${escapeJavaScript(doc.id)}')" class="bg-green-500 hover:bg-green-700 text-white px-3 py-1 rounded text-sm">
+                                <button onclick="shareDocument('\${escapeJavaScript(doc.name || doc.id)}')" class="bg-green-500 hover:bg-green-700 text-white px-3 py-1 rounded text-sm">
                                     分享
                                 </button>
                                 <button onclick="deleteDocument('\${escapeJavaScript(doc.id)}')" class="bg-red-500 hover:bg-red-700 text-white px-3 py-1 rounded text-sm">
@@ -1710,24 +1619,9 @@ function getMainScript() {
         window.location.href = "/edit/" + docId;
     }
 
-    async function shareDocument(docId) {
-        try {
-            const response = await apiCall(\`/api/admin/documents/\${docId}/share\`, {
-                method: "POST"
-            });
-            const result = await response.json();
-
-            const shareUrl = window.location.origin + result.shareUrl;
-
-            if (navigator.clipboard) {
-                await navigator.clipboard.writeText(shareUrl);
-                alert("分享链接已复制到剪贴板:\\n" + shareUrl);
-            } else {
-                prompt("分享链接（请手动复制）:", shareUrl);
-            }
-        } catch (error) {
-            alert("创建分享链接失败: " + error.message);
-        }
+    function shareDocument(docNameOrId) {
+        // 直接复用现有的 copyDirectLink 逻辑
+        copyDirectLink(docNameOrId);
     }
 
     async function deleteDocument(docId) {
@@ -1978,6 +1872,8 @@ function getEditHTML(docId) {
             }
         }
 
+        let documentName = null; // 存储文档名称用于分享
+
         async function loadDocument() {
             try {
                 const response = await apiCall(\`/api/admin/documents/\${docId}\`);
@@ -1985,6 +1881,9 @@ function getEditHTML(docId) {
 
                 document.getElementById("titleInput").value = docData.title;
                 document.getElementById("contentInput").value = docData.content;
+
+                // 保存文档名称用于分享功能
+                documentName = docData.name;
             } catch (error) {
                 console.error("Failed to load document:", error);
                 showMessage("加载文档失败", "error");
@@ -2012,23 +1911,33 @@ function getEditHTML(docId) {
             }
         }
 
-        async function shareDocument() {
-            try {
-                const response = await apiCall(\`/api/admin/documents/\${docId}/share\`, {
-                    method: "POST"
-                });
-                const result = await response.json();
-
-                const shareUrl = window.location.origin + result.shareUrl;
+        function shareDocument() {
+            // 如果文档有名称，使用文档名称；否则提示用户设置文档名称
+            if (documentName) {
+                const url = window.location.origin + "/" + documentName;
 
                 if (navigator.clipboard) {
-                    await navigator.clipboard.writeText(shareUrl);
-                    showMessage("分享链接已复制到剪贴板", "success");
+                    navigator.clipboard.writeText(url).then(function() {
+                        showMessage("分享链接已复制到剪贴板", "success");
+                    }).catch(function() {
+                        showMessage("复制失败，请手动复制: " + url, "error");
+                    });
                 } else {
-                    prompt("分享链接（请手动复制）:", shareUrl);
+                    // 降级方案
+                    const textArea = document.createElement("textarea");
+                    textArea.value = url;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    try {
+                        document.execCommand("copy");
+                        showMessage("分享链接已复制到剪贴板", "success");
+                    } catch (err) {
+                        showMessage("复制失败，请手动复制: " + url, "error");
+                    }
+                    document.body.removeChild(textArea);
                 }
-            } catch (error) {
-                showMessage("创建分享链接失败", "error");
+            } else {
+                showMessage("此文档没有设置自定义名称，无法生成分享链接", "error");
             }
         }
 
@@ -2067,107 +1976,6 @@ function getEditHTML(docId) {
 
         // 初始化
         loadDocument();
-    </script>
-</body>
-</html>`;
-}
-
-function getShareHTML(shareToken) {
-  return `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>分享文档 - CF Notepad</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-100 min-h-screen">
-    <header class="bg-white shadow-sm">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-center py-6">
-                <h1 class="text-3xl font-bold text-gray-900">分享文档</h1>
-                <button id="copyBtn" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
-                    复制内容
-                </button>
-            </div>
-        </div>
-    </header>
-
-    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div class="px-4 py-6 sm:px-0">
-            <div class="bg-white shadow overflow-hidden sm:rounded-md">
-                <div class="px-4 py-5 sm:p-6">
-                    <h3 id="documentTitle" class="text-lg leading-6 font-medium text-gray-900 mb-4">加载中...</h3>
-                    <div id="documentContent" class="whitespace-pre-wrap font-mono text-sm bg-gray-50 p-4 rounded border">
-                        加载中...
-                    </div>
-                    <div id="documentInfo" class="mt-4 text-sm text-gray-500">
-                        <!-- 文档信息将在这里显示 -->
-                    </div>
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <script>
-        const shareToken = "${escapeJavaScript(shareToken)}";
-
-        async function loadSharedDocument() {
-            try {
-                const response = await fetch(\`/api/public/share/\${shareToken}\`);
-                if (!response.ok) {
-                    throw new Error("Document not found");
-                }
-
-                const docData = await response.json();
-
-                document.getElementById("documentTitle").textContent = docData.title;
-                document.getElementById("documentContent").textContent = docData.content;
-
-                const createdDate = new Date(docData.createdAt).toLocaleString();
-                const updatedDate = new Date(docData.updatedAt).toLocaleString();
-
-                document.getElementById("documentInfo").innerHTML = \`
-                    <p>创建时间: \${createdDate}</p>
-                    <p>更新时间: \${updatedDate}</p>
-                \`;
-            } catch (error) {
-                console.error("Failed to load shared document:", error);
-                document.getElementById("documentTitle").textContent = "文档不存在";
-                document.getElementById("documentContent").textContent = "抱歉，您访问的文档不存在或已过期。";
-            }
-        }
-
-        function copyContent() {
-            const content = document.getElementById("documentContent").textContent;
-
-            if (navigator.clipboard) {
-                navigator.clipboard.writeText(content).then(function() {
-                    alert("内容已复制到剪贴板");
-                }).catch(function() {
-                    alert("复制失败，请手动选择并复制");
-                });
-            } else {
-                // 降级方案
-                const textArea = document.createElement("textarea");
-                textArea.value = content;
-                document.body.appendChild(textArea);
-                textArea.select();
-                try {
-                    document.execCommand("copy");
-                    alert("内容已复制到剪贴板");
-                } catch (err) {
-                    alert("复制失败，请手动选择并复制");
-                }
-                document.body.removeChild(textArea);
-            }
-        }
-
-        // 绑定事件
-        document.getElementById("copyBtn").addEventListener("click", copyContent);
-
-        // 初始化
-        loadSharedDocument();
     </script>
 </body>
 </html>`;
