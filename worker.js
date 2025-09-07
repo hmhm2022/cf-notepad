@@ -1541,6 +1541,25 @@ function getMainScript() {
                 return div.innerHTML;
             }
 
+            // JavaScript字符串转义函数
+            function escapeJavaScript(text) {
+                if (typeof text !== 'string') {
+                    return '';
+                }
+
+                return text.replace(/\\\\/g, '\\\\\\\\')
+                          .replace(/"/g, '\\\\"')
+                          .replace(/'/g, "\\\\'")
+                          .replace(/\\n/g, '\\\\n')
+                          .replace(/\\r/g, '\\\\r')
+                          .replace(/\\t/g, '\\\\t')
+                          .replace(/\\b/g, '\\\\b')
+                          .replace(/\\f/g, '\\\\f')
+                          .replace(/\\v/g, '\\\\v')
+                          .replace(/\\0/g, '\\\\0')
+                          .replace(/\`/g, '\\\\\`');
+            }
+
             listElement.innerHTML = documents.map(doc => {
                 const createdDate = new Date(doc.createdAt).toLocaleString();
                 const updatedDate = new Date(doc.updatedAt).toLocaleString();
