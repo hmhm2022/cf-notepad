@@ -2453,8 +2453,8 @@ function getDirectDocHTML(document, permission) {
                         </svg>
                     </button>
                     <button id="saveBtn" style="display: none;" class="btn-icon btn-icon-success" title="保存文档">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        <svg fill="currentColor" viewBox="0 0 24 24">
+                            <path d="m20.71 9.29l-6-6a1 1 0 0 0-.32-.21A1.1 1.1 0 0 0 14 3H6a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3v-8a1 1 0 0 0-.29-.71M9 5h4v2H9Zm6 14H9v-3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1Zm4-1a1 1 0 0 1-1 1h-1v-3a3 3 0 0 0-3-3h-4a3 3 0 0 0-3 3v3H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h1v3a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V6.41l4 4Z"/>
                         </svg>
                     </button>
                     <button id="cancelBtn" style="display: none;" class="btn-icon" title="退出编辑">
@@ -2486,7 +2486,11 @@ function getDirectDocHTML(document, permission) {
                                class="input-modern w-full">
                     </div>
                     <div class="mb-6">
-                        <label class="block text-gray-700 text-sm font-semibold mb-3">文档内容</label>
+                        <div class="flex items-center justify-between mb-3">
+                            <label class="block text-gray-700 text-sm font-semibold">文档内容</label>
+                            <!-- 状态消息 -->
+                            <div id="statusMessage" class="text-sm text-gray-600 hidden"></div>
+                        </div>
                         <textarea id="contentInput" rows="20"
                                   class="input-modern w-full font-mono text-sm leading-relaxed resize-y mobile-text-area"
                                   placeholder="请输入文档内容...">${escapeHtml(document.content)}</textarea>
@@ -2500,8 +2504,8 @@ function getDirectDocHTML(document, permission) {
             <div class="text-sm text-blue-600 space-y-2">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     ${document.name ? `<div><span class="font-medium text-gray-700">文档名称:</span> <span class="text-blue-600">${escapeHtml(document.name)}</span></div>` : ''}
-                    <div><span class="font-medium text-gray-700">创建时间:</span> <span class="text-blue-600">${new Date(document.createdAt).toLocaleString('zh-CN')}</span></div>
-                    <div><span class="font-medium text-gray-700">更新时间:</span> <span class="text-blue-600" data-update-time>${new Date(document.updatedAt).toLocaleString('zh-CN')}</span></div>
+                    <div><span class="font-medium text-gray-700">创建时间:</span> <span class="text-blue-600">${new Date(document.createdAt).toLocaleString('zh-CN', {timeZone: 'Asia/Shanghai'})}</span></div>
+                    <div><span class="font-medium text-gray-700">更新时间:</span> <span class="text-blue-600" data-update-time>${new Date(document.updatedAt).toLocaleString('zh-CN', {timeZone: 'Asia/Shanghai'})}</span></div>
                     <div><span class="font-medium text-gray-700">查看次数:</span> <span class="text-blue-600">${document.viewCount}</span></div>
                 </div>
             </div>
@@ -2514,25 +2518,53 @@ function getDirectDocHTML(document, permission) {
     </div>
 
     <script>
+        function showMessage(message, type) {
+            const messageDiv = document.getElementById("statusMessage");
+
+            let colorClass;
+            let displayMessage = message;
+
+            // 如果是保存成功消息，添加时间戳
+            if (type === "success" && (message.includes("保存成功") || message.includes("自动保存"))) {
+                const now = new Date();
+                const timeStr = now.getHours().toString().padStart(2, '0') + ':' +
+                               now.getMinutes().toString().padStart(2, '0') + ':' +
+                               now.getSeconds().toString().padStart(2, '0');
+                displayMessage = timeStr + ' ' + message;
+            }
+
+            messageDiv.textContent = displayMessage;
+
+            switch(type) {
+                case "success":
+                    colorClass = "text-green-600";
+                    break;
+                case "error":
+                    colorClass = "text-red-600";
+                    break;
+                case "info":
+                    colorClass = "text-blue-600";
+                    break;
+                default:
+                    colorClass = "text-gray-600";
+            }
+
+            messageDiv.className = \`text-sm \${colorClass}\`;
+            messageDiv.classList.remove("hidden");
+
+            setTimeout(() => {
+                messageDiv.classList.add("hidden");
+            }, 3000);
+        }
+
         function copyContent() {
             const content = document.getElementById("documentContent").textContent;
 
             if (navigator.clipboard) {
                 navigator.clipboard.writeText(content).then(function() {
-                    // 显示复制成功提示
-                    const btn = document.getElementById("copyBtn");
-                    const originalText = btn.textContent;
-                    btn.textContent = "已复制!";
-                    btn.classList.remove("bg-blue-500", "hover:bg-blue-700");
-                    btn.classList.add("bg-green-500");
-
-                    setTimeout(() => {
-                        btn.textContent = originalText;
-                        btn.classList.remove("bg-green-500");
-                        btn.classList.add("bg-blue-500", "hover:bg-blue-700");
-                    }, 2000);
+                    showMessage("内容已复制到剪贴板", "info");
                 }).catch(function() {
-                    alert("复制失败，请手动选择并复制");
+                    showMessage("复制失败，请手动选择并复制", "error");
                 });
             } else {
                 // 降级方案
@@ -2542,19 +2574,9 @@ function getDirectDocHTML(document, permission) {
                 textArea.select();
                 try {
                     document.execCommand("copy");
-                    const btn = document.getElementById("copyBtn");
-                    const originalText = btn.textContent;
-                    btn.textContent = "已复制!";
-                    btn.classList.remove("bg-blue-500", "hover:bg-blue-700");
-                    btn.classList.add("bg-green-500");
-
-                    setTimeout(() => {
-                        btn.textContent = originalText;
-                        btn.classList.remove("bg-green-500");
-                        btn.classList.add("bg-blue-500", "hover:bg-blue-700");
-                    }, 2000);
+                    showMessage("内容已复制到剪贴板", "info");
                 } catch (err) {
-                    alert("复制失败，请手动选择并复制");
+                    showMessage("复制失败，请手动选择并复制", "error");
                 }
                 document.body.removeChild(textArea);
             }
@@ -2607,17 +2629,27 @@ function getDirectDocHTML(document, permission) {
 
             if (!title) {
                 if (!isAutoSave) {
-                    alert("请输入文档标题");
+                    showMessage("请输入文档标题", "error");
                 }
                 return;
             }
 
             const saveBtn = document.getElementById("saveBtn");
-            const originalText = saveBtn.textContent;
+            let originalIcon = null;
 
             if (!isAutoSave) {
-                saveBtn.textContent = "保存中...";
+                // 保存原始图标
+                originalIcon = saveBtn.innerHTML;
+
+                // 显示加载状态
+                saveBtn.innerHTML = \`
+                    <svg class="animate-spin" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" opacity="0.3"/>
+                        <path d="M12 2C13.1 2 14 2.9 14 4s-.9 2-2 2-2-.9-2-2 .9-2 2-2z"/>
+                    </svg>
+                \`;
                 saveBtn.disabled = true;
+                showMessage("保存中...", "info");
             }
 
             try {
@@ -2651,31 +2683,37 @@ function getDirectDocHTML(document, permission) {
                     }
 
                     if (!isAutoSave) {
-                        exitEditMode();
+                        // 先显示保存成功消息
+                        showMessage("保存成功", "success");
 
-                        // 显示成功提示
-                        saveBtn.textContent = "已保存!";
-                        saveBtn.classList.remove("bg-blue-500", "hover:bg-blue-700");
-                        saveBtn.classList.add("bg-green-500");
+                        // 显示成功图标
+                        saveBtn.innerHTML = \`
+                            <svg fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                        \`;
 
+                        // 延迟退出编辑模式，确保用户能看到反馈
                         setTimeout(() => {
-                            saveBtn.textContent = originalText;
-                            saveBtn.classList.remove("bg-green-500");
-                            saveBtn.classList.add("bg-blue-500", "hover:bg-blue-700");
+                            exitEditMode();
+                            saveBtn.innerHTML = originalIcon;
                             saveBtn.disabled = false;
-                        }, 2000);
+                        }, 1500);
+                    } else {
+                        // 自动保存成功时也显示简短提示
+                        showMessage("自动保存", "success");
                     }
                 } else {
                     if (!isAutoSave) {
-                        alert(result.error || "保存失败，请重试");
-                        saveBtn.textContent = originalText;
+                        showMessage(result.error || "保存失败，请重试", "error");
+                        saveBtn.innerHTML = originalIcon;
                         saveBtn.disabled = false;
                     }
                 }
             } catch (error) {
                 if (!isAutoSave) {
-                    alert("网络错误，请检查连接后重试");
-                    saveBtn.textContent = originalText;
+                    showMessage("网络错误，请检查连接后重试", "error");
+                    saveBtn.innerHTML = originalIcon;
                     saveBtn.disabled = false;
                 }
             }
@@ -2690,6 +2728,8 @@ function getDirectDocHTML(document, permission) {
 
         // 绑定事件
         document.getElementById("copyBtn").addEventListener("click", copyContent);
+
+
 
         ${canWrite(permission) ? `
         document.getElementById("editBtn").addEventListener("click", enterEditMode);
