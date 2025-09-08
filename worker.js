@@ -1587,12 +1587,42 @@ function getModernStyles() {
         }
 
         .card-modern {
-          margin: 8px;
-          border-radius: 12px;
+          margin: 4px;
+          border-radius: 8px;
         }
 
         .input-modern {
           font-size: 16px; /* 防止iOS Safari缩放 */
+        }
+
+        /* 移动端紧凑布局 */
+        .mobile-compact-container {
+          padding: 8px !important;
+        }
+
+        .mobile-compact-card {
+          padding: 12px !important;
+          margin-bottom: 8px !important;
+        }
+
+        .mobile-compact-main {
+          padding-top: 12px !important;
+          padding-bottom: 12px !important;
+        }
+
+        .mobile-compact-header {
+          padding-top: 16px !important;
+          padding-bottom: 16px !important;
+        }
+
+        /* 文本区域优化 */
+        .mobile-text-area {
+          min-height: 60vh !important;
+        }
+
+        .mobile-content-display {
+          padding: 12px !important;
+          min-height: 65vh !important;
         }
       }
 
@@ -1665,8 +1695,8 @@ function getMainHTML() {
             </div>
         </header>
 
-        <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-            <div class="px-4 py-6 sm:px-0">
+        <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 mobile-compact-main">
+            <div class="px-4 py-6 sm:px-0 mobile-compact-container">
                 <!-- 创建新文档按钮 -->
                 <div class="mb-8">
                     <button id="createDocBtn" class="btn-base btn-success">
@@ -1679,7 +1709,7 @@ function getMainHTML() {
 
                 <!-- 文档列表 -->
                 <div class="card-modern">
-                    <div class="px-6 py-6 sm:p-8">
+                    <div class="px-6 py-6 sm:p-8 mobile-compact-card">
                         <h3 class="text-xl font-semibold text-gray-900 mb-6">文档列表</h3>
                         <div id="documentsList" class="space-y-4">
                             <!-- 文档列表将在这里动态加载 -->
@@ -1846,7 +1876,7 @@ function getMainScript() {
                 }
 
                 return \`
-                    <div class="card-modern p-6 hover:shadow-xl transition-all duration-200">
+                    <div class="card-modern p-6 hover:shadow-xl transition-all duration-200 mobile-compact-card">
                         <div class="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-4">
                             <div class="flex-1">
                                 <h4 class="text-xl font-semibold text-gray-900 mb-3">\${escapeHtml(doc.title)}</h4>
@@ -2113,17 +2143,17 @@ function getEditHTML(docId) {
         </div>
     </header>
 
-    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div class="px-4 py-6 sm:px-0">
+    <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 mobile-compact-main">
+        <div class="px-4 py-6 sm:px-0 mobile-compact-container">
             <div class="card-modern">
-                <div class="px-6 py-6 sm:p-8">
+                <div class="px-6 py-6 sm:p-8 mobile-compact-card">
                     <div class="mb-6">
                         <label class="block text-gray-700 text-sm font-semibold mb-3">文档标题</label>
                         <input type="text" id="titleInput" class="input-modern w-full" placeholder="请输入文档标题">
                     </div>
                     <div class="mb-6">
                         <label class="block text-gray-700 text-sm font-semibold mb-3">文档内容</label>
-                        <textarea id="contentInput" rows="20" class="input-modern w-full font-mono text-sm leading-relaxed resize-y" placeholder="请输入文档内容..."></textarea>
+                        <textarea id="contentInput" rows="20" class="input-modern w-full font-mono text-sm leading-relaxed resize-y mobile-text-area" placeholder="请输入文档内容..."></textarea>
                     </div>
                     <div id="statusMessage" class="mt-4 text-sm hidden"></div>
                 </div>
@@ -2266,7 +2296,7 @@ function get404HTML() {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>页面未找到 - 云端粘贴板</title>
+    <title>页面未找到 - CF Notepad</title>
     <script src="https://cdn.tailwindcss.com"></script>
     ${getModernStyles()}
 </head>
@@ -2302,7 +2332,7 @@ function getDocPasswordHTML(docName, docTitle) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>访问文档：${escapeHtml(docTitle)} - 云端粘贴板</title>
+    <title>访问文档：${escapeHtml(docTitle)} - CF Notepad</title>
     <script src="https://cdn.tailwindcss.com"></script>
     ${getModernStyles()}
 </head>
@@ -2403,26 +2433,19 @@ function getDirectDocHTML(document, permission) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>${escapeHtml(document.title)} - 云端粘贴板</title>
+    <title>${escapeHtml(document.title)} - CF Notepad</title>
     <script src="https://cdn.tailwindcss.com"></script>
     ${getModernStyles()}
 </head>
 <body class="bg-gradient-modern min-h-screen">
-    <div class="container mx-auto px-4 py-8 max-w-4xl">
+    <div class="container mx-auto px-4 py-8 max-w-4xl mobile-compact-container">
         <!-- 头部信息 -->
-        <div class="card-modern p-6 mb-8">
-            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-                <div class="flex-1">
-                    <h1 class="text-3xl font-bold text-gray-800 mb-4">${escapeHtml(document.title)}</h1>
-                    <div class="text-sm text-gray-600 space-y-2">
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            ${document.name ? `<div><span class="font-medium">文档名称:</span> ${escapeHtml(document.name)}</div>` : ''}
-                            <div><span class="font-medium">创建时间:</span> ${new Date(document.createdAt).toLocaleString('zh-CN')}</div>
-                            <div><span class="font-medium">查看次数:</span> ${document.viewCount}</div>
-                        </div>
-                    </div>
+        <div class="card-modern p-6 mb-8 mobile-compact-card mobile-compact-header">
+            <div class="flex items-center justify-between gap-4">
+                <div class="flex-1 min-w-0">
+                    <h1 class="text-2xl font-bold text-gray-800 truncate">${escapeHtml(document.title)}</h1>
                 </div>
-                <div class="flex gap-1">
+                <div class="flex gap-1 flex-shrink-0">
                     ${canWrite(permission) ? `
                     <button id="editBtn" class="btn-icon btn-icon-primary" title="编辑文档">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2431,10 +2454,10 @@ function getDirectDocHTML(document, permission) {
                     </button>
                     <button id="saveBtn" style="display: none;" class="btn-icon btn-icon-success" title="保存文档">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3-3m0 0l-3 3m3-3v12"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                         </svg>
                     </button>
-                    <button id="cancelBtn" style="display: none;" class="btn-icon" title="取消编辑">
+                    <button id="cancelBtn" style="display: none;" class="btn-icon" title="退出编辑">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                         </svg>
@@ -2445,20 +2468,15 @@ function getDirectDocHTML(document, permission) {
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
                         </svg>
                     </button>
-                    <a href="/" class="btn-icon" title="返回首页">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
-                        </svg>
-                    </a>
                 </div>
             </div>
         </div>
 
         <!-- 文档内容 -->
-        <div class="card-modern p-6">
+        <div class="card-modern p-6 mobile-compact-card">
             <div class="prose max-w-none">
                 <!-- 查看模式 -->
-                <pre id="documentContent" class="whitespace-pre-wrap font-mono text-sm bg-gray-50 p-6 rounded-xl border border-gray-200 overflow-x-auto leading-relaxed">${escapeHtml(document.content)}</pre>
+                <pre id="documentContent" class="whitespace-pre-wrap font-mono text-sm bg-gray-50 p-6 rounded-xl border border-gray-200 overflow-x-auto leading-relaxed mobile-content-display">${escapeHtml(document.content)}</pre>
 
                 <!-- 编辑模式 -->
                 <div id="editMode" style="display: none;">
@@ -2470,16 +2488,28 @@ function getDirectDocHTML(document, permission) {
                     <div class="mb-6">
                         <label class="block text-gray-700 text-sm font-semibold mb-3">文档内容</label>
                         <textarea id="contentInput" rows="20"
-                                  class="input-modern w-full font-mono text-sm leading-relaxed resize-y"
+                                  class="input-modern w-full font-mono text-sm leading-relaxed resize-y mobile-text-area"
                                   placeholder="请输入文档内容...">${escapeHtml(document.content)}</textarea>
                     </div>
                 </div>
             </div>
         </div>
 
+        <!-- 文档元信息 -->
+        <div class="card-modern p-6 mt-6 mobile-compact-card">
+            <div class="text-sm text-blue-600 space-y-2">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    ${document.name ? `<div><span class="font-medium text-gray-700">文档名称:</span> <span class="text-blue-600">${escapeHtml(document.name)}</span></div>` : ''}
+                    <div><span class="font-medium text-gray-700">创建时间:</span> <span class="text-blue-600">${new Date(document.createdAt).toLocaleString('zh-CN')}</span></div>
+                    <div><span class="font-medium text-gray-700">更新时间:</span> <span class="text-blue-600" data-update-time>${new Date(document.updatedAt).toLocaleString('zh-CN')}</span></div>
+                    <div><span class="font-medium text-gray-700">查看次数:</span> <span class="text-blue-600">${document.viewCount}</span></div>
+                </div>
+            </div>
+        </div>
+
         <!-- 页脚信息 -->
         <div class="mt-6 text-center text-gray-500 text-sm">
-            <p>云端粘贴板 - 安全、便捷的文档分享平台</p>
+            <p>CF Notepad - 安全、便捷的文档分享平台</p>
         </div>
     </div>
 
@@ -2571,19 +2601,24 @@ function getDirectDocHTML(document, permission) {
             exitEditMode();
         }
 
-        async function saveDocument() {
+        async function saveDocument(isAutoSave = false) {
             const title = document.getElementById("titleInput").value.trim();
             const content = document.getElementById("contentInput").value;
 
             if (!title) {
-                alert("请输入文档标题");
+                if (!isAutoSave) {
+                    alert("请输入文档标题");
+                }
                 return;
             }
 
             const saveBtn = document.getElementById("saveBtn");
             const originalText = saveBtn.textContent;
-            saveBtn.textContent = "保存中...";
-            saveBtn.disabled = true;
+
+            if (!isAutoSave) {
+                saveBtn.textContent = "保存中...";
+                saveBtn.disabled = true;
+            }
 
             try {
                 // 获取当前会话token
@@ -2609,28 +2644,40 @@ function getDirectDocHTML(document, permission) {
                     originalTitle = title;
                     originalContent = content;
 
-                    exitEditMode();
+                    // 更新页面上的更新时间显示
+                    const updateTimeElement = document.querySelector('[data-update-time]');
+                    if (updateTimeElement) {
+                        updateTimeElement.textContent = new Date().toLocaleString('zh-CN');
+                    }
 
-                    // 显示成功提示
-                    saveBtn.textContent = "已保存!";
-                    saveBtn.classList.remove("bg-blue-500", "hover:bg-blue-700");
-                    saveBtn.classList.add("bg-green-500");
+                    if (!isAutoSave) {
+                        exitEditMode();
 
-                    setTimeout(() => {
-                        saveBtn.textContent = originalText;
-                        saveBtn.classList.remove("bg-green-500");
-                        saveBtn.classList.add("bg-blue-500", "hover:bg-blue-700");
-                        saveBtn.disabled = false;
-                    }, 2000);
+                        // 显示成功提示
+                        saveBtn.textContent = "已保存!";
+                        saveBtn.classList.remove("bg-blue-500", "hover:bg-blue-700");
+                        saveBtn.classList.add("bg-green-500");
+
+                        setTimeout(() => {
+                            saveBtn.textContent = originalText;
+                            saveBtn.classList.remove("bg-green-500");
+                            saveBtn.classList.add("bg-blue-500", "hover:bg-blue-700");
+                            saveBtn.disabled = false;
+                        }, 2000);
+                    }
                 } else {
-                    alert(result.error || "保存失败，请重试");
+                    if (!isAutoSave) {
+                        alert(result.error || "保存失败，请重试");
+                        saveBtn.textContent = originalText;
+                        saveBtn.disabled = false;
+                    }
+                }
+            } catch (error) {
+                if (!isAutoSave) {
+                    alert("网络错误，请检查连接后重试");
                     saveBtn.textContent = originalText;
                     saveBtn.disabled = false;
                 }
-            } catch (error) {
-                alert("网络错误，请检查连接后重试");
-                saveBtn.textContent = originalText;
-                saveBtn.disabled = false;
             }
         }
 
@@ -2648,6 +2695,16 @@ function getDirectDocHTML(document, permission) {
         document.getElementById("editBtn").addEventListener("click", enterEditMode);
         document.getElementById("saveBtn").addEventListener("click", saveDocument);
         document.getElementById("cancelBtn").addEventListener("click", cancelEdit);
+
+        // 自动保存功能
+        let saveTimeout;
+        function autoSave() {
+            clearTimeout(saveTimeout);
+            saveTimeout = setTimeout(() => saveDocument(true), 2000);
+        }
+
+        document.getElementById("titleInput").addEventListener("input", autoSave);
+        document.getElementById("contentInput").addEventListener("input", autoSave);
         ` : ''}
 
         // 键盘快捷键支持
