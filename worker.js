@@ -599,6 +599,12 @@ async function handleAdminAPI(request, path, method) {
     return handleDeleteDocument(docId);
   }
 
+  // 文档属性管理API
+  if (path.startsWith('/api/admin/documents/') && path.endsWith('/properties') && method === 'PUT') {
+    const docId = decodeURIComponent(path.split('/')[4]);
+    return handleUpdateDocumentProperties(docId, request);
+  }
+
   return new Response(JSON.stringify({ error: 'API not found' }), {
     status: 404,
     headers: { 'Content-Type': 'application/json' }
@@ -995,16 +1001,18 @@ async function handleUpdateDocumentByName(docName, request) {
     const { title, content } = parsedData;
 
     // 验证输入
-    const titleValidation = validateInput(title, 'title');
-    const contentValidation = validateInput(content, 'content', { allowEmpty: true });
-
-    if (!titleValidation.valid) {
-      return new Response(JSON.stringify({ error: titleValidation.error || 'Invalid title' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+    // 只有在提供了title时才验证title
+    if (title !== undefined) {
+      const titleValidation = validateInput(title, 'title');
+      if (!titleValidation.valid) {
+        return new Response(JSON.stringify({ error: titleValidation.error || 'Invalid title' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
     }
 
+    const contentValidation = validateInput(content, 'content', { allowEmpty: true });
     if (!contentValidation.valid) {
       return new Response(JSON.stringify({ error: contentValidation.error || 'Invalid content' }), {
         status: 400,
@@ -1035,8 +1043,13 @@ async function handleUpdateDocumentByName(docName, request) {
     }
 
     // 更新文档
-    document.title = sanitizeInput(title, 'title');
-    document.content = sanitizeInput(content, 'content');
+    // 检查是否为管理员权限，只有管理员可以修改标题
+    if (title !== undefined && canAdmin(permission)) {
+      document.title = sanitizeInput(title, 'title');
+    }
+    if (content !== undefined) {
+      document.content = sanitizeInput(content, 'content');
+    }
     document.updatedAt = Date.now();
 
     await NOTEPAD_KV.put('doc_' + docId, JSON.stringify(document));
@@ -1082,6 +1095,82 @@ async function handleDeleteDocument(docId) {
   return new Response(JSON.stringify({ success: true }), {
     headers: { 'Content-Type': 'application/json' }
   });
+}
+
+// 更新文档属性（管理员专用）
+async function handleUpdateDocumentProperties(docId, request) {
+  try {
+    const { title, content, accessLevel, password, expiryDays } = await request.json();
+
+    const docData = await NOTEPAD_KV.get('doc_' + docId);
+    if (!docData) {
+      return new Response(JSON.stringify({ error: 'Document not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const document = JSON.parse(docData);
+
+    // 更新基本信息
+    if (title !== undefined) {
+      document.title = sanitizeInput(title, 'title');
+    }
+    if (content !== undefined) {
+      document.content = sanitizeInput(content, 'content');
+    }
+
+    // 更新访问级别
+    if (accessLevel !== undefined) {
+      document.accessLevel = accessLevel;
+    }
+
+    // 更新密码
+    if (password !== undefined) {
+      if (password) {
+        document.password = await hashPassword(password);
+      } else {
+        // 清除密码
+        document.password = null;
+      }
+    }
+
+    // 更新过期时间
+    if (expiryDays !== undefined) {
+      if (expiryDays === -1) {
+        document.expiresAt = null; // 永不过期
+      } else {
+        const now = Date.now();
+        document.expiresAt = now + (expiryDays * 24 * 60 * 60 * 1000);
+      }
+    }
+
+    document.updatedAt = Date.now();
+
+    await NOTEPAD_KV.put('doc_' + docId, JSON.stringify(document));
+
+    return new Response(JSON.stringify({
+      success: true,
+      document: {
+        id: document.id,
+        name: document.name,
+        title: document.title,
+        accessLevel: document.accessLevel,
+        hasPassword: !!document.password,
+        expiresAt: document.expiresAt,
+        updatedAt: document.updatedAt
+      }
+    }), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+  } catch (error) {
+    console.error('Error updating document properties:', error);
+    return new Response(JSON.stringify({ error: 'Failed to update document properties' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
 }
 
 // 通过名称获取文档（用于直接访问）
@@ -2151,6 +2240,49 @@ function getEditHTML(docId) {
                         <label class="block text-gray-700 text-sm font-semibold mb-3">文档标题</label>
                         <input type="text" id="titleInput" class="input-modern w-full" placeholder="请输入文档标题">
                     </div>
+
+                    <!-- 文档属性管理区域 -->
+                    <div class="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">文档属性设置</h3>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- 访问权限设置 -->
+                            <div>
+                                <label class="block text-gray-700 text-sm font-semibold mb-2">访问权限</label>
+                                <select id="accessLevelSelect" class="input-modern w-full">
+                                    <option value="public_read">公开只读</option>
+                                    <option value="public_write">公开可编辑</option>
+                                    <option value="password_read">密码保护只读</option>
+                                    <option value="password_write">密码保护可编辑</option>
+                                    <option value="private">仅管理员可访问</option>
+                                </select>
+                            </div>
+
+                            <!-- 过期时间设置 -->
+                            <div>
+                                <label class="block text-gray-700 text-sm font-semibold mb-2">过期时间</label>
+                                <select id="expirySelect" class="input-modern w-full">
+                                    <option value="1">1天后过期</option>
+                                    <option value="7">7天后过期</option>
+                                    <option value="30">30天后过期</option>
+                                    <option value="-1">永不过期</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- 密码设置 -->
+                        <div class="mt-4">
+                            <label class="block text-gray-700 text-sm font-semibold mb-2">访问密码</label>
+                            <div class="flex gap-2">
+                                <input type="password" id="documentPasswordInput" class="input-modern flex-1" placeholder="设置文档访问密码（可选）">
+                                <button type="button" id="clearPasswordBtn" class="btn-secondary px-3 py-2 text-sm">清除密码</button>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">
+                                仅在选择密码保护权限时需要设置
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="mb-6">
                         <label class="block text-gray-700 text-sm font-semibold mb-3">文档内容</label>
                         <textarea id="contentInput" rows="20" class="input-modern w-full font-mono text-sm leading-relaxed resize-y mobile-text-area" placeholder="请输入文档内容..."></textarea>
@@ -2190,6 +2322,26 @@ function getEditHTML(docId) {
                 document.getElementById("titleInput").value = docData.title;
                 document.getElementById("contentInput").value = docData.content;
 
+                // 加载文档属性
+                document.getElementById("accessLevelSelect").value = docData.accessLevel || "public_read";
+                document.getElementById("documentPasswordInput").value = ""; // 不显示现有密码
+
+                // 设置过期时间
+                if (docData.expiresAt) {
+                    const daysUntilExpiry = Math.ceil((docData.expiresAt - Date.now()) / (24 * 60 * 60 * 1000));
+                    if (daysUntilExpiry <= 1) {
+                        document.getElementById("expirySelect").value = "1";
+                    } else if (daysUntilExpiry <= 7) {
+                        document.getElementById("expirySelect").value = "7";
+                    } else if (daysUntilExpiry <= 30) {
+                        document.getElementById("expirySelect").value = "30";
+                    } else {
+                        document.getElementById("expirySelect").value = "-1";
+                    }
+                } else {
+                    document.getElementById("expirySelect").value = "-1";
+                }
+
                 // 保存文档名称用于分享功能
                 documentName = docData.name;
             } catch (error) {
@@ -2201,17 +2353,41 @@ function getEditHTML(docId) {
         async function saveDocument() {
             const title = document.getElementById("titleInput").value;
             const content = document.getElementById("contentInput").value;
+            const accessLevel = document.getElementById("accessLevelSelect").value;
+            const password = document.getElementById("documentPasswordInput").value;
+            const expiryDays = parseInt(document.getElementById("expirySelect").value);
+
+            // 验证密码保护文档必须设置密码
+            if ((accessLevel === "password_read" || accessLevel === "password_write") && !password) {
+                showMessage("密码保护文档必须设置访问密码", "error");
+                return;
+            }
 
             try {
-                const response = await apiCall(\`/api/admin/documents/\${docId}\`, {
+                const requestData = {
+                    title,
+                    content,
+                    accessLevel,
+                    expiryDays
+                };
+
+                // 只有在设置了密码时才包含密码字段
+                if (password) {
+                    requestData.password = password;
+                }
+
+                const response = await apiCall(\`/api/admin/documents/\${docId}/properties\`, {
                     method: "PUT",
-                    body: JSON.stringify({ title, content })
+                    body: JSON.stringify(requestData)
                 });
 
                 if (response.ok) {
                     showMessage("保存成功", "success");
+                    // 清空密码输入框
+                    document.getElementById("documentPasswordInput").value = "";
                 } else {
-                    showMessage("保存失败", "error");
+                    const errorData = await response.json();
+                    showMessage("保存失败: " + (errorData.error || "未知错误"), "error");
                 }
             } catch (error) {
                 console.error("Failed to save document:", error);
@@ -2264,6 +2440,22 @@ function getEditHTML(docId) {
         document.getElementById("saveBtn").addEventListener("click", saveDocument);
         document.getElementById("shareBtn").addEventListener("click", shareDocument);
 
+        // 清除密码按钮
+        document.getElementById("clearPasswordBtn").addEventListener("click", () => {
+            document.getElementById("documentPasswordInput").value = "";
+            showMessage("密码已清除", "info");
+        });
+
+        // 访问权限变化时的提示
+        document.getElementById("accessLevelSelect").addEventListener("change", function() {
+            const accessLevel = this.value;
+            const passwordInput = document.getElementById("documentPasswordInput");
+
+            if (accessLevel === "password_read" || accessLevel === "password_write") {
+                showMessage("请设置文档访问密码", "info");
+            }
+        });
+
         // 自动保存
         let saveTimeout;
         function autoSave() {
@@ -2271,7 +2463,10 @@ function getEditHTML(docId) {
             saveTimeout = setTimeout(saveDocument, 2000);
         }
 
-        document.getElementById("titleInput").addEventListener("input", autoSave);
+        const titleInput = document.getElementById("titleInput");
+        if (titleInput) {
+            titleInput.addEventListener("input", autoSave);
+        }
         document.getElementById("contentInput").addEventListener("input", autoSave);
 
         // 快捷键
@@ -2480,11 +2675,13 @@ function getDirectDocHTML(document, permission) {
 
                 <!-- 编辑模式 -->
                 <div id="editMode" style="display: none;">
+                    ${canAdmin(permission) ? `
                     <div class="mb-6">
                         <label class="block text-gray-700 text-sm font-semibold mb-3">文档标题</label>
                         <input type="text" id="titleInput" value="${escapeHtml(document.title)}"
                                class="input-modern w-full">
                     </div>
+                    ` : ''}
                     <div class="mb-6">
                         <div class="flex items-center justify-between mb-3">
                             <label class="block text-gray-700 text-sm font-semibold">文档内容</label>
@@ -2618,21 +2815,28 @@ function getDirectDocHTML(document, permission) {
 
         function cancelEdit() {
             // 恢复原始值
-            document.getElementById("titleInput").value = originalTitle;
+            const titleInput = document.getElementById("titleInput");
+            if (titleInput) {
+                titleInput.value = originalTitle;
+            }
             document.getElementById("contentInput").value = originalContent;
             exitEditMode();
         }
 
         async function saveDocument(isAutoSave = false) {
-            const title = document.getElementById("titleInput").value.trim();
+            const titleInput = document.getElementById("titleInput");
+            const title = titleInput ? titleInput.value.trim() : originalTitle; // 如果没有标题输入框，使用原标题
             const content = document.getElementById("contentInput").value;
 
+            // 对于访客模式，不验证标题（因为可能没有标题输入框）
+            ${canAdmin(permission) ? `
             if (!title) {
                 if (!isAutoSave) {
                     showMessage("请输入文档标题", "error");
                 }
                 return;
             }
+            ` : ''}
 
             const saveBtn = document.getElementById("saveBtn");
             let originalIcon = null;
@@ -2656,24 +2860,34 @@ function getDirectDocHTML(document, permission) {
                 // 获取当前会话token
                 const sessionToken = getCookie("sessionToken");
 
+                // 构建请求数据，访客模式下不包含标题修改
+                const requestData = { content };
+                ${canAdmin(permission) ? `
+                requestData.title = title;
+                ` : ''}
+
                 const response = await fetch(\`/api/public/documents/${encodeURIComponent(document.name || document.id)}\`, {
                     method: "PUT",
                     headers: {
                         "Content-Type": "application/json",
                         "X-Session-Token": sessionToken
                     },
-                    body: JSON.stringify({ title, content })
+                    body: JSON.stringify(requestData)
                 });
 
                 const result = await response.json();
 
                 if (response.ok) {
                     // 更新页面显示
+                    ${canAdmin(permission) ? `
                     document.querySelector("h1").textContent = title;
+                    ` : ''}
                     document.getElementById("documentContent").textContent = content;
 
                     // 更新原始值
+                    ${canAdmin(permission) ? `
                     originalTitle = title;
+                    ` : ''}
                     originalContent = content;
 
                     // 更新页面上的更新时间显示
@@ -2743,7 +2957,9 @@ function getDirectDocHTML(document, permission) {
             saveTimeout = setTimeout(() => saveDocument(true), 2000);
         }
 
+        ${canAdmin(permission) ? `
         document.getElementById("titleInput").addEventListener("input", autoSave);
+        ` : ''}
         document.getElementById("contentInput").addEventListener("input", autoSave);
         ` : ''}
 
