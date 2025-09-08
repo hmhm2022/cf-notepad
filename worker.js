@@ -1365,26 +1365,282 @@ function getCommonJavaScript() {
 
 // ==================== HTML 页面生成函数 ====================
 
+// 现代化样式系统
+function getModernStyles() {
+  return `
+    <style>
+      :root {
+        --primary-50: #eff6ff;
+        --primary-100: #dbeafe;
+        --primary-500: #3b82f6;
+        --primary-600: #2563eb;
+        --primary-700: #1d4ed8;
+        --success-500: #10b981;
+        --success-600: #059669;
+        --warning-500: #f59e0b;
+        --warning-600: #d97706;
+        --danger-500: #ef4444;
+        --danger-600: #dc2626;
+        --gray-50: #f9fafb;
+        --gray-100: #f3f4f6;
+        --gray-900: #111827;
+      }
+
+      /* 触控友好的按钮基础样式 */
+      .btn-base {
+        min-height: 44px;
+        padding: 12px 24px;
+        border-radius: 12px;
+        font-weight: 600;
+        transition: all 0.2s ease;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        text-decoration: none;
+        border: none;
+        cursor: pointer;
+        font-size: 14px;
+        line-height: 1.25;
+      }
+
+      .btn-base:active {
+        transform: scale(0.95);
+      }
+
+      .btn-base:focus {
+        outline: none;
+        ring: 4px;
+        ring-opacity: 50%;
+      }
+
+      /* 主要按钮样式 */
+      .btn-primary {
+        background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+        color: white;
+      }
+
+      .btn-primary:hover {
+        background: linear-gradient(135deg, var(--primary-600), var(--primary-700));
+        box-shadow: 0 8px 15px -3px rgba(59, 130, 246, 0.3);
+      }
+
+      .btn-primary:focus {
+        ring-color: var(--primary-200);
+      }
+
+      /* 成功按钮样式 */
+      .btn-success {
+        background: linear-gradient(135deg, var(--success-500), var(--success-600));
+        color: white;
+      }
+
+      .btn-success:hover {
+        background: linear-gradient(135deg, var(--success-600), #047857);
+        box-shadow: 0 8px 15px -3px rgba(16, 185, 129, 0.3);
+      }
+
+      /* 危险按钮样式 */
+      .btn-danger {
+        background: linear-gradient(135deg, var(--danger-500), var(--danger-600));
+        color: white;
+      }
+
+      .btn-danger:hover {
+        background: linear-gradient(135deg, var(--danger-600), #b91c1c);
+        box-shadow: 0 8px 15px -3px rgba(239, 68, 68, 0.3);
+      }
+
+      /* 次要按钮样式 */
+      .btn-secondary {
+        background: linear-gradient(135deg, #6b7280, #4b5563);
+        color: white;
+      }
+
+      .btn-secondary:hover {
+        background: linear-gradient(135deg, #4b5563, #374151);
+        box-shadow: 0 8px 15px -3px rgba(107, 114, 128, 0.3);
+      }
+
+      /* 小按钮样式 */
+      .btn-sm {
+        min-height: 36px;
+        padding: 8px 16px;
+        font-size: 13px;
+      }
+
+      /* 图标按钮样式 */
+      .btn-icon {
+        min-height: 44px;
+        min-width: 44px;
+        padding: 10px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: transparent;
+        border: none;
+        border-radius: 8px;
+        color: #6b7280; /* text-gray-500 */
+        transition: all 0.2s ease;
+        cursor: pointer;
+        text-decoration: none;
+      }
+
+      .btn-icon:hover {
+        background-color: #f3f4f6; /* bg-gray-100 */
+        color: #374151; /* text-gray-700 */
+        transform: none;
+        box-shadow: none;
+      }
+
+      .btn-icon:active {
+        transform: scale(0.95);
+        background-color: #e5e7eb; /* bg-gray-200 */
+      }
+
+      .btn-icon:focus {
+        outline: none;
+        ring: 2px;
+        ring-color: #d1d5db; /* ring-gray-300 */
+        ring-opacity: 50%;
+      }
+
+      .btn-icon svg {
+        width: 24px;
+        height: 24px;
+      }
+
+      /* 特殊颜色的图标按钮 */
+      .btn-icon.btn-icon-danger {
+        color: #dc2626; /* text-red-600 */
+      }
+
+      .btn-icon.btn-icon-danger:hover {
+        color: #b91c1c; /* text-red-700 */
+        background-color: #fef2f2; /* bg-red-50 */
+      }
+
+      .btn-icon.btn-icon-success {
+        color: #059669; /* text-emerald-600 */
+      }
+
+      .btn-icon.btn-icon-success:hover {
+        color: #047857; /* text-emerald-700 */
+        background-color: #ecfdf5; /* bg-emerald-50 */
+      }
+
+      .btn-icon.btn-icon-primary {
+        color: #2563eb; /* text-blue-600 */
+      }
+
+      .btn-icon.btn-icon-primary:hover {
+        color: #1d4ed8; /* text-blue-700 */
+        background-color: #eff6ff; /* bg-blue-50 */
+      }
+
+      /* 现代化输入框样式 */
+      .input-modern {
+        min-height: 44px;
+        padding: 12px 16px;
+        border: 2px solid #e5e7eb;
+        border-radius: 12px;
+        transition: all 0.2s ease;
+        font-size: 16px; /* 防止iOS缩放 */
+      }
+
+      .input-modern:focus {
+        outline: none;
+        border-color: var(--primary-500);
+        ring: 4px;
+        ring-color: var(--primary-100);
+        ring-opacity: 50%;
+      }
+
+      /* 现代化卡片样式 */
+      .card-modern {
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        border: 1px solid rgba(0, 0, 0, 0.05);
+      }
+
+      /* 渐变背景 */
+      .bg-gradient-modern {
+        background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+      }
+
+      /* 移动端优化 */
+      @media (max-width: 640px) {
+        .btn-base {
+          width: 100%;
+          margin-bottom: 8px;
+        }
+
+        .btn-group-mobile {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .btn-group-mobile .btn-base {
+          margin-bottom: 0;
+        }
+
+        .card-modern {
+          margin: 8px;
+          border-radius: 12px;
+        }
+
+        .input-modern {
+          font-size: 16px; /* 防止iOS Safari缩放 */
+        }
+      }
+
+      /* 平板端优化 */
+      @media (min-width: 641px) and (max-width: 1024px) {
+        .btn-group-tablet {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 12px;
+        }
+      }
+
+      /* 桌面端优化 */
+      @media (min-width: 1025px) {
+        .btn-group-desktop {
+          display: flex;
+          gap: 12px;
+        }
+
+        .btn-group-desktop .btn-base {
+          width: auto;
+        }
+      }
+    </style>
+  `;
+}
+
 function getMainHTML() {
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>CF Notepad</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    ${getModernStyles()}
 </head>
-<body class="bg-gray-100 min-h-screen">
+<body class="bg-gradient-modern min-h-screen">
     <!-- 登录模态框 -->
-    <div id="loginModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div class="bg-white rounded-lg p-8 max-w-md w-full mx-4">
+    <div id="loginModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+        <div class="card-modern p-8 max-w-md w-full">
             <h2 class="text-2xl font-bold mb-6 text-center text-gray-800">登录验证</h2>
             <form id="loginForm">
-                <div class="mb-4">
-                    <label class="block text-gray-700 text-sm font-bold mb-2">密码</label>
-                    <input type="password" id="passwordInput" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                <div class="mb-6">
+                    <label class="block text-gray-700 text-sm font-semibold mb-3">密码</label>
+                    <input type="password" id="passwordInput" class="input-modern w-full" placeholder="请输入密码" required>
                 </div>
-                <button type="submit" class="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+                <button type="submit" class="btn-base btn-primary w-full">
                     登录
                 </button>
             </form>
@@ -1394,13 +1650,17 @@ function getMainHTML() {
 
     <!-- 主界面 -->
     <div id="mainApp" class="hidden">
-        <header class="bg-white shadow-sm">
+        <header class="bg-white shadow-lg border-b border-gray-100">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div class="flex justify-between items-center py-6">
-                    <h1 class="text-3xl font-bold text-gray-900">CF Notepad</h1>
-                    <button id="logoutBtn" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
-                        退出登录
-                    </button>
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center py-6 gap-4">
+                    <h1 class="text-3xl font-bold text-gray-900 text-center sm:text-left">CF Notepad</h1>
+                    <div class="flex">
+                        <button id="logoutBtn" class="btn-icon btn-icon-danger" title="退出登录">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
             </div>
         </header>
@@ -1408,17 +1668,20 @@ function getMainHTML() {
         <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
             <div class="px-4 py-6 sm:px-0">
                 <!-- 创建新文档按钮 -->
-                <div class="mb-6">
-                    <button id="createDocBtn" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
-                        + 创建新文档
+                <div class="mb-8">
+                    <button id="createDocBtn" class="btn-base btn-success">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                        创建新文档
                     </button>
                 </div>
 
                 <!-- 文档列表 -->
-                <div class="bg-white shadow overflow-hidden sm:rounded-md">
-                    <div class="px-4 py-5 sm:p-6">
-                        <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">文档列表</h3>
-                        <div id="documentsList" class="space-y-3">
+                <div class="card-modern">
+                    <div class="px-6 py-6 sm:p-8">
+                        <h3 class="text-xl font-semibold text-gray-900 mb-6">文档列表</h3>
+                        <div id="documentsList" class="space-y-4">
                             <!-- 文档列表将在这里动态加载 -->
                         </div>
                     </div>
@@ -1428,58 +1691,58 @@ function getMainHTML() {
     </div>
 
     <!-- 创建文档模态框 -->
-    <div id="createModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
-        <div class="bg-white rounded-lg p-8 max-w-lg w-full mx-4 max-h-screen overflow-y-auto">
+    <div id="createModal" class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 hidden p-4">
+        <div class="card-modern p-8 max-w-lg w-full max-h-screen overflow-y-auto">
             <h2 class="text-2xl font-bold mb-6 text-center text-gray-800">创建新文档</h2>
             <form id="createForm">
-                <div class="mb-4">
-                    <label class="block text-gray-700 text-sm font-bold mb-2">文档标题</label>
-                    <input type="text" id="titleInput" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                <div class="mb-6">
+                    <label class="block text-gray-700 text-sm font-semibold mb-3">文档标题</label>
+                    <input type="text" id="titleInput" class="input-modern w-full" placeholder="请输入文档标题" required>
                 </div>
 
-                <div class="mb-4">
-                    <label class="block text-gray-700 text-sm font-bold mb-2">
+                <div class="mb-6">
+                    <label class="block text-gray-700 text-sm font-semibold mb-3">
                         自定义文档名称
                         <span class="text-gray-500 font-normal">(可选，用于直接访问)</span>
                     </label>
                     <input type="text" id="customNameInput"
-                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                           class="input-modern w-full"
                            placeholder="例如: my-document (3-50个字符，仅限字母数字-_)">
-                    <div class="text-xs text-gray-500 mt-1">
+                    <div class="text-xs text-gray-500 mt-2">
                         设置后可通过 域名/文档名称 直接访问
                     </div>
                 </div>
 
-                <div class="mb-4">
-                    <label class="block text-gray-700 text-sm font-bold mb-2">访问权限</label>
-                    <select id="accessLevelSelect" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <div class="mb-6">
+                    <label class="block text-gray-700 text-sm font-semibold mb-3">访问权限</label>
+                    <select id="accessLevelSelect" class="input-modern w-full">
                         <option value="public_read">公开只读 - 任何人都可以查看，但不能编辑</option>
                         <option value="public_write">公开可编辑 - 任何人都可以查看和编辑</option>
                         <option value="password_read">密码保护只读 - 需要密码才能查看</option>
                         <option value="password_write">密码保护可编辑 - 需要密码才能查看和编辑</option>
                         <option value="private">私有 - 仅管理员可访问</option>
                     </select>
-                    <div class="text-xs text-gray-500 mt-1">
+                    <div class="text-xs text-gray-500 mt-2">
                         选择文档的访问权限级别
                     </div>
                 </div>
 
-                <div class="mb-4" id="passwordSection" style="display: none;">
-                    <label class="block text-gray-700 text-sm font-bold mb-2">
+                <div class="mb-6" id="passwordSection" style="display: none;">
+                    <label class="block text-gray-700 text-sm font-semibold mb-3">
                         访问密码
                         <span class="text-red-500">*</span>
                     </label>
                     <input type="password" id="createPasswordInput"
-                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                           class="input-modern w-full"
                            placeholder="设置密码保护文档">
-                    <div class="text-xs text-gray-500 mt-1">
+                    <div class="text-xs text-gray-500 mt-2">
                         密码保护文档需要设置访问密码
                     </div>
                 </div>
 
-                <div class="mb-6">
-                    <label class="block text-gray-700 text-sm font-bold mb-2">过期时间</label>
-                    <select id="expirySelect" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <div class="mb-8">
+                    <label class="block text-gray-700 text-sm font-semibold mb-3">过期时间</label>
+                    <select id="expirySelect" class="input-modern w-full">
                         <option value="1">1天</option>
                         <option value="7" selected>7天</option>
                         <option value="30">30天</option>
@@ -1487,13 +1750,13 @@ function getMainHTML() {
                     </select>
                 </div>
 
-                <div id="createError" class="mb-4 text-red-500 text-sm hidden"></div>
+                <div id="createError" class="mb-6 text-red-500 text-sm hidden"></div>
 
-                <div class="flex space-x-4">
-                    <button type="submit" class="flex-1 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                <div class="btn-group-mobile sm:btn-group-desktop">
+                    <button type="submit" class="btn-base btn-primary flex-1">
                         创建
                     </button>
-                    <button type="button" id="cancelCreateBtn" class="flex-1 bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">
+                    <button type="button" id="cancelCreateBtn" class="btn-base btn-secondary flex-1">
                         取消
                     </button>
                 </div>
@@ -1563,19 +1826,19 @@ function getMainScript() {
 
                 let directAccessSection = '';
                 if (doc.name) {
-                    const passwordBadge = doc.hasPassword ? '<span class="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">🔒 密码保护</span>' : '';
+                    const passwordBadge = doc.hasPassword ? '<span class="ml-2 inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 border border-yellow-200">🔒 密码保护</span>' : '';
                     directAccessSection = \`
-                        <div class="mb-2">
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        <div class="mb-3">
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
                                 直接访问: \${escapeHtml(doc.name)}
                             </span>
                             \${passwordBadge}
                         </div>
-                        <div class="mb-2">
-                            <a href="/\${encodeURIComponent(doc.name)}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm underline">
+                        <div class="mb-3">
+                            <a href="/\${encodeURIComponent(doc.name)}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm underline font-medium">
                                 \${currentDomain}/\${escapeHtml(doc.name)}
                             </a>
-                            <button onclick="copyDirectLink('\${escapeJavaScript(doc.name)}')" class="ml-2 text-gray-500 hover:text-gray-700 text-xs">
+                            <button onclick="copyDirectLink('\${escapeJavaScript(doc.name)}')" class="ml-3 text-gray-500 hover:text-gray-700 text-xs bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded transition-colors">
                                 📋 复制链接
                             </button>
                         </div>
@@ -1583,27 +1846,35 @@ function getMainScript() {
                 }
 
                 return \`
-                    <div class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
-                        <div class="flex justify-between items-start">
+                    <div class="card-modern p-6 hover:shadow-xl transition-all duration-200">
+                        <div class="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-4">
                             <div class="flex-1">
-                                <h4 class="text-lg font-medium text-gray-900 mb-2">\${escapeHtml(doc.title)}</h4>
+                                <h4 class="text-xl font-semibold text-gray-900 mb-3">\${escapeHtml(doc.title)}</h4>
                                 \${directAccessSection}
-                                <div class="text-sm text-gray-500 space-y-1">
-                                    <p>创建时间: \${createdDate}</p>
-                                    <p>更新时间: \${updatedDate}</p>
-                                    <p>查看次数: \${doc.viewCount}</p>
-                                    <p>过期时间: \${expiryText}</p>
+                                <div class="text-sm text-gray-600 space-y-2">
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        <p><span class="font-medium">创建时间:</span> \${createdDate}</p>
+                                        <p><span class="font-medium">更新时间:</span> \${updatedDate}</p>
+                                        <p><span class="font-medium">查看次数:</span> \${doc.viewCount}</p>
+                                        <p><span class="font-medium">过期时间:</span> \${expiryText}</p>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="flex space-x-2 ml-4">
-                                <button onclick="editDocument('\${escapeJavaScript(doc.id)}')" class="bg-blue-500 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm">
-                                    编辑
+                            <div class="flex gap-1 lg:ml-6">
+                                <button onclick="editDocument('\${escapeJavaScript(doc.id)}')" class="btn-icon btn-icon-primary" title="编辑文档">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                    </svg>
                                 </button>
-                                <button onclick="shareDocument('\${escapeJavaScript(doc.name || doc.id)}')" class="bg-green-500 hover:bg-green-700 text-white px-3 py-1 rounded text-sm">
-                                    分享
+                                <button onclick="shareDocument('\${escapeJavaScript(doc.name || doc.id)}')" class="btn-icon btn-icon-success" title="分享文档">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z"></path>
+                                    </svg>
                                 </button>
-                                <button onclick="deleteDocument('\${escapeJavaScript(doc.id)}')" class="bg-red-500 hover:bg-red-700 text-white px-3 py-1 rounded text-sm">
-                                    删除
+                                <button onclick="deleteDocument('\${escapeJavaScript(doc.id)}')" class="btn-icon btn-icon-danger" title="删除文档">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                    </svg>
                                 </button>
                             </div>
                         </div>
@@ -1811,24 +2082,31 @@ function getEditHTML(docId) {
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>编辑文档 - CF Notepad</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    ${getModernStyles()}
 </head>
-<body class="bg-gray-100 min-h-screen">
-    <header class="bg-white shadow-sm">
+<body class="bg-gradient-modern min-h-screen">
+    <header class="bg-white shadow-lg border-b border-gray-100">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-center py-6">
-                <h1 class="text-3xl font-bold text-gray-900">编辑文档</h1>
-                <div class="flex space-x-4">
-                    <button id="saveBtn" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
-                        保存
+            <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center py-6 gap-4">
+                <h1 class="text-3xl font-bold text-gray-900 text-center sm:text-left">编辑文档</h1>
+                <div class="flex gap-1">
+                    <button id="saveBtn" class="btn-icon btn-icon-primary" title="保存文档">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3-3m0 0l-3 3m3-3v12"></path>
+                        </svg>
                     </button>
-                    <button id="shareBtn" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
-                        分享
+                    <button id="shareBtn" class="btn-icon btn-icon-success" title="分享文档">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z"></path>
+                        </svg>
                     </button>
-                    <a href="/" class="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">
-                        返回
+                    <a href="/" class="btn-icon" title="返回首页">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                        </svg>
                     </a>
                 </div>
             </div>
@@ -1837,15 +2115,15 @@ function getEditHTML(docId) {
 
     <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div class="px-4 py-6 sm:px-0">
-            <div class="bg-white shadow overflow-hidden sm:rounded-md">
-                <div class="px-4 py-5 sm:p-6">
-                    <div class="mb-4">
-                        <label class="block text-gray-700 text-sm font-bold mb-2">文档标题</label>
-                        <input type="text" id="titleInput" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <div class="card-modern">
+                <div class="px-6 py-6 sm:p-8">
+                    <div class="mb-6">
+                        <label class="block text-gray-700 text-sm font-semibold mb-3">文档标题</label>
+                        <input type="text" id="titleInput" class="input-modern w-full" placeholder="请输入文档标题">
                     </div>
-                    <div class="mb-4">
-                        <label class="block text-gray-700 text-sm font-bold mb-2">文档内容</label>
-                        <textarea id="contentInput" rows="20" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"></textarea>
+                    <div class="mb-6">
+                        <label class="block text-gray-700 text-sm font-semibold mb-3">文档内容</label>
+                        <textarea id="contentInput" rows="20" class="input-modern w-full font-mono text-sm leading-relaxed resize-y" placeholder="请输入文档内容..."></textarea>
                     </div>
                     <div id="statusMessage" class="mt-4 text-sm hidden"></div>
                 </div>
@@ -1987,19 +2265,28 @@ function get404HTML() {
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>页面未找到 - 云端粘贴板</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    ${getModernStyles()}
 </head>
-<body class="bg-gray-100 min-h-screen flex items-center justify-center">
-    <div class="max-w-md w-full bg-white rounded-lg shadow-md p-8 text-center">
-        <div class="mb-6">
-            <div class="text-6xl text-gray-400 mb-4">404</div>
-            <h1 class="text-2xl font-bold text-gray-800 mb-2">页面未找到</h1>
-            <p class="text-gray-600">抱歉，您访问的文档不存在或已过期。</p>
+<body class="bg-gradient-modern min-h-screen flex items-center justify-center p-4">
+    <div class="max-w-md w-full card-modern p-8 text-center">
+        <div class="mb-8">
+            <div class="mb-6">
+                <svg class="w-24 h-24 mx-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+            </div>
+            <div class="text-6xl font-bold text-gray-400 mb-4">404</div>
+            <h1 class="text-3xl font-bold text-gray-800 mb-4">页面未找到</h1>
+            <p class="text-gray-600 text-lg">抱歉，您访问的文档不存在或已过期。</p>
         </div>
-        <div class="space-y-3">
-            <a href="/" class="block w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition duration-200">
+        <div class="space-y-4">
+            <a href="/" class="btn-base btn-primary w-full">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+                </svg>
                 返回首页
             </a>
         </div>
@@ -2014,36 +2301,48 @@ function getDocPasswordHTML(docName, docTitle) {
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>访问文档：${escapeHtml(docTitle)} - 云端粘贴板</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    ${getModernStyles()}
 </head>
-<body class="bg-gray-100 min-h-screen flex items-center justify-center">
-    <div class="max-w-md w-full bg-white rounded-lg shadow-md p-8">
-        <div class="text-center mb-6">
-            <h1 class="text-2xl font-bold text-gray-800 mb-2">访问受保护的文档</h1>
-            <p class="text-gray-600">${escapeHtml(docTitle)}</p>
+<body class="bg-gradient-modern min-h-screen flex items-center justify-center p-4">
+    <div class="max-w-md w-full card-modern p-8">
+        <div class="text-center mb-8">
+            <div class="mb-4">
+                <svg class="w-16 h-16 mx-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                </svg>
+            </div>
+            <h1 class="text-2xl font-bold text-gray-800 mb-3">访问受保护的文档</h1>
+            <p class="text-gray-600 text-lg">${escapeHtml(docTitle)}</p>
         </div>
 
-        <form id="passwordForm" class="space-y-4">
+        <form id="passwordForm" class="space-y-6">
             <div>
-                <label for="passwordInput" class="block text-sm font-medium text-gray-700 mb-2">
+                <label for="passwordInput" class="block text-sm font-semibold text-gray-700 mb-3">
                     请输入文档密码
                 </label>
                 <input type="password" id="passwordInput"
-                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                       class="input-modern w-full"
                        placeholder="输入密码" required>
             </div>
-            <button type="submit"
-                    class="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline transition duration-200">
+            <button type="submit" class="btn-base btn-primary w-full">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"></path>
+                </svg>
                 访问文档
             </button>
         </form>
 
-        <div id="errorMessage" class="mt-4 text-red-500 text-sm hidden"></div>
+        <div id="errorMessage" class="mt-6 text-red-500 text-sm hidden"></div>
 
-        <div class="mt-6 text-center">
-            <a href="/" class="text-blue-500 hover:text-blue-700 text-sm">返回首页</a>
+        <div class="mt-8 text-center">
+            <a href="/" class="btn-icon" title="返回首页">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+                </svg>
+            </a>
         </div>
     </div>
 
@@ -2103,67 +2402,75 @@ function getDirectDocHTML(document, permission) {
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>${escapeHtml(document.title)} - 云端粘贴板</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    ${getModernStyles()}
 </head>
-<body class="bg-gray-100 min-h-screen">
+<body class="bg-gradient-modern min-h-screen">
     <div class="container mx-auto px-4 py-8 max-w-4xl">
         <!-- 头部信息 -->
-        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-                <div class="mb-4 sm:mb-0">
-                    <h1 class="text-2xl font-bold text-gray-800 mb-2">${escapeHtml(document.title)}</h1>
-                    <div class="text-sm text-gray-600 space-y-1">
-                        ${document.name ? `<div>文档名称: <span class="font-medium">${escapeHtml(document.name)}</span></div>` : ''}
-                        <div>创建时间: ${new Date(document.createdAt).toLocaleString('zh-CN')}</div>
-                        <div>查看次数: ${document.viewCount}</div>
+        <div class="card-modern p-6 mb-8">
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+                <div class="flex-1">
+                    <h1 class="text-3xl font-bold text-gray-800 mb-4">${escapeHtml(document.title)}</h1>
+                    <div class="text-sm text-gray-600 space-y-2">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            ${document.name ? `<div><span class="font-medium">文档名称:</span> ${escapeHtml(document.name)}</div>` : ''}
+                            <div><span class="font-medium">创建时间:</span> ${new Date(document.createdAt).toLocaleString('zh-CN')}</div>
+                            <div><span class="font-medium">查看次数:</span> ${document.viewCount}</div>
+                        </div>
                     </div>
                 </div>
-                <div class="flex flex-col sm:flex-row gap-2">
+                <div class="flex gap-1">
                     ${canWrite(permission) ? `
-                    <button id="editBtn"
-                            class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition duration-200">
-                        编辑文档
+                    <button id="editBtn" class="btn-icon btn-icon-primary" title="编辑文档">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                        </svg>
                     </button>
-                    <button id="saveBtn" style="display: none;"
-                            class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition duration-200">
-                        保存
+                    <button id="saveBtn" style="display: none;" class="btn-icon btn-icon-success" title="保存文档">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3-3m0 0l-3 3m3-3v12"></path>
+                        </svg>
                     </button>
-                    <button id="cancelBtn" style="display: none;"
-                            class="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded transition duration-200">
-                        取消
+                    <button id="cancelBtn" style="display: none;" class="btn-icon" title="取消编辑">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
                     </button>
                     ` : ''}
-                    <button id="copyBtn"
-                            class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition duration-200">
-                        复制内容
+                    <button id="copyBtn" class="btn-icon btn-icon-primary" title="复制内容">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                        </svg>
                     </button>
-                    <a href="/"
-                       class="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded text-center transition duration-200">
-                        返回首页
+                    <a href="/" class="btn-icon" title="返回首页">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+                        </svg>
                     </a>
                 </div>
             </div>
         </div>
 
         <!-- 文档内容 -->
-        <div class="bg-white rounded-lg shadow-md p-6">
+        <div class="card-modern p-6">
             <div class="prose max-w-none">
                 <!-- 查看模式 -->
-                <pre id="documentContent" class="whitespace-pre-wrap font-mono text-sm bg-gray-50 p-4 rounded border overflow-x-auto">${escapeHtml(document.content)}</pre>
+                <pre id="documentContent" class="whitespace-pre-wrap font-mono text-sm bg-gray-50 p-6 rounded-xl border border-gray-200 overflow-x-auto leading-relaxed">${escapeHtml(document.content)}</pre>
 
                 <!-- 编辑模式 -->
                 <div id="editMode" style="display: none;">
-                    <div class="mb-4">
-                        <label class="block text-gray-700 text-sm font-bold mb-2">文档标题</label>
+                    <div class="mb-6">
+                        <label class="block text-gray-700 text-sm font-semibold mb-3">文档标题</label>
                         <input type="text" id="titleInput" value="${escapeHtml(document.title)}"
-                               class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                               class="input-modern w-full">
                     </div>
-                    <div class="mb-4">
-                        <label class="block text-gray-700 text-sm font-bold mb-2">文档内容</label>
+                    <div class="mb-6">
+                        <label class="block text-gray-700 text-sm font-semibold mb-3">文档内容</label>
                         <textarea id="contentInput" rows="20"
-                                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                                  class="input-modern w-full font-mono text-sm leading-relaxed resize-y"
                                   placeholder="请输入文档内容...">${escapeHtml(document.content)}</textarea>
                     </div>
                 </div>
