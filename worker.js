@@ -95,6 +95,61 @@ async function getDocumentByName(docName) {
   }
 }
 
+// 检查标题重名（友好提示，不强制）
+async function checkTitleDuplication(title, excludeDocId = null) {
+  try {
+    if (!title || title.trim() === '') {
+      return { hasDuplication: false, count: 0 };
+    }
+
+    const normalizedTitle = title.trim().toLowerCase();
+    let duplicateCount = 0;
+    const suggestions = [];
+
+    // 获取所有文档列表（这里简化实现，实际可能需要更高效的索引）
+    const { keys } = await NOTEPAD_KV.list({ prefix: 'doc_' });
+
+    // 限制检查数量以避免性能问题
+    const maxCheck = Math.min(keys.length, 100);
+
+    for (let i = 0; i < maxCheck; i++) {
+      const key = keys[i];
+      if (excludeDocId && key.name === 'doc_' + excludeDocId) {
+        continue; // 排除当前编辑的文档
+      }
+
+      try {
+        const docData = await NOTEPAD_KV.get(key.name);
+        if (docData) {
+          const document = safeJsonParse(docData);
+          if (document && document.title) {
+            const docTitle = document.title.trim().toLowerCase();
+            if (docTitle === normalizedTitle) {
+              duplicateCount++;
+              if (suggestions.length < 3) {
+                // 生成建议标题
+                suggestions.push(`${title} (${new Date(document.createdAt).toLocaleDateString()})`);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        // 忽略单个文档的错误，继续检查其他文档
+        continue;
+      }
+    }
+
+    return {
+      hasDuplication: duplicateCount > 0,
+      count: duplicateCount,
+      suggestions: suggestions.slice(0, 2) // 最多返回2个建议
+    };
+  } catch (error) {
+    console.error('Error checking title duplication:', error);
+    return { hasDuplication: false, count: 0 };
+  }
+}
+
 // 通用文档获取函数 - 通过ID获取
 async function getDocumentById(docId) {
   try {
@@ -575,6 +630,11 @@ async function handleAdminAPI(request, path, method) {
     });
   }
 
+  // 检查标题重名API
+  if (path === '/api/admin/check-title' && method === 'POST') {
+    return handleCheckTitle(request);
+  }
+
   // 文档管理API
   if (path === '/api/admin/documents' && method === 'GET') {
     return handleGetDocuments();
@@ -773,6 +833,38 @@ async function handleGetDocuments() {
   });
 }
 
+// 检查标题重名
+async function handleCheckTitle(request) {
+  try {
+    const requestData = await request.json();
+    const { title, excludeDocId } = requestData;
+
+    if (!title || title.trim() === '') {
+      return new Response(JSON.stringify({
+        hasDuplication: false,
+        count: 0
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const result = await checkTitleDuplication(title, excludeDocId);
+
+    return new Response(JSON.stringify(result), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  } catch (error) {
+    console.error('Error checking title:', error);
+    return new Response(JSON.stringify({
+      hasDuplication: false,
+      count: 0
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+}
+
 // 创建文档
 async function handleCreateDocument(request) {
   try {
@@ -857,30 +949,38 @@ async function handleCreateDocument(request) {
       }
     }
 
-    // 验证自定义名称
-    if (customName) {
-      console.log('Validating customName:', `"${customName}"`);
-      const nameValidation = validateInput(customName, 'docName');
-      if (!nameValidation.valid) {
-        console.log('CustomName validation failed:', nameValidation.error);
-        return new Response(JSON.stringify({
-          error: nameValidation.error
-        }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
+    // 验证文档名称（现在是必填的）
+    if (!customName || customName.trim() === '') {
+      console.log('CustomName is required but not provided');
+      return new Response(JSON.stringify({
+        error: '文档名称为必填项'
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
 
-      // 检查名称是否已存在
-      const existingMapping = await NOTEPAD_KV.get('name_' + customName);
-      if (existingMapping) {
-        return new Response(JSON.stringify({
-          error: '文档名称已存在，请选择其他名称'
-        }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
+    console.log('Validating customName:', `"${customName}"`);
+    const nameValidation = validateInput(customName, 'docName');
+    if (!nameValidation.valid) {
+      console.log('CustomName validation failed:', nameValidation.error);
+      return new Response(JSON.stringify({
+        error: nameValidation.error
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // 检查名称是否已存在
+    const existingMapping = await NOTEPAD_KV.get('name_' + customName);
+    if (existingMapping) {
+      return new Response(JSON.stringify({
+        error: '文档名称已存在，请选择其他名称'
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     const docId = generateId();
@@ -900,7 +1000,7 @@ async function handleCreateDocument(request) {
 
     const document = {
       id: docId,
-      name: customName || null,
+      name: customName, // 现在总是有值，不再是可选的
       title: sanitizeInput(title || 'Untitled', 'title'),
       content: sanitizeInput(content || '', 'content'),
       password: password ? await hashPassword(password) : null,
@@ -918,10 +1018,8 @@ async function handleCreateDocument(request) {
     // 保存文档
     await NOTEPAD_KV.put('doc_' + docId, JSON.stringify(document), kvOptions);
 
-    // 如果有自定义名称，创建名称到ID的映射
-    if (customName) {
-      await NOTEPAD_KV.put('name_' + customName, docId, kvOptions);
-    }
+    // 创建名称到ID的映射（现在总是需要）
+    await NOTEPAD_KV.put('name_' + customName, docId, kvOptions);
 
     return new Response(JSON.stringify(document), {
       headers: { 'Content-Type': 'application/json' }
@@ -1836,18 +1934,27 @@ function getMainHTML() {
                 <div class="mb-6">
                     <label class="block text-gray-700 text-sm font-semibold mb-3">文档标题</label>
                     <input type="text" id="titleInput" class="input-modern w-full" placeholder="请输入文档标题" required>
+                    <div id="titleWarning" class="hidden mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
+                        <div class="flex items-center">
+                            <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                            </svg>
+                            <span id="titleWarningText"></span>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="mb-6">
                     <label class="block text-gray-700 text-sm font-semibold mb-3">
-                        自定义文档名称
-                        <span class="text-gray-500 font-normal">(可选，用于直接访问)</span>
+                        文档名称 <span class="text-red-500">*</span>
+                        <span class="text-gray-500 font-normal">(用于直接访问)</span>
                     </label>
                     <input type="text" id="customNameInput"
                            class="input-modern w-full"
-                           placeholder="例如: my-document (3-50个字符，仅限字母数字-_)">
+                           placeholder="例如: my-document (3-50个字符，仅限字母数字-_)"
+                           required>
                     <div class="text-xs text-gray-500 mt-2">
-                        设置后可通过 域名/文档名称 直接访问
+                        通过 域名/文档名称 直接访问，名称必须唯一
                     </div>
                 </div>
 
@@ -2088,6 +2195,18 @@ function getMainScript() {
 
     document.getElementById("createDocBtn").addEventListener("click", function() {
         document.getElementById("createModal").classList.remove("hidden");
+
+        // 在模态框显示后绑定标题重名检查功能
+        const titleInput = document.getElementById("titleInput");
+        const warningDiv = document.getElementById("titleWarning");
+
+        if (titleInput && warningDiv) {
+            // 移除之前可能存在的监听器
+            titleInput.removeEventListener("input", titleInputHandler);
+
+            // 添加新的监听器
+            titleInput.addEventListener("input", titleInputHandler);
+        }
     });
 
     document.getElementById("cancelCreateBtn").addEventListener("click", function() {
@@ -2110,6 +2229,54 @@ function getMainScript() {
         }
     });
 
+    // 标题重名检查功能
+    let titleCheckTimeout;
+
+    // 标题输入处理函数
+    function titleInputHandler() {
+        const title = this.value.trim();
+        const warningDiv = document.getElementById("titleWarning");
+
+        // 清除之前的定时器
+        if (titleCheckTimeout) {
+            clearTimeout(titleCheckTimeout);
+        }
+
+        // 如果标题为空，隐藏警告
+        if (!title) {
+            warningDiv.classList.add("hidden");
+            return;
+        }
+
+        // 延迟检查，避免频繁请求
+        titleCheckTimeout = setTimeout(async () => {
+            try {
+                const response = await apiCall("/api/admin/check-title", {
+                    method: "POST",
+                    body: JSON.stringify({ title: title })
+                });
+
+                const data = await response.json();
+
+                if (data.hasDuplication) {
+                    const warningText = document.getElementById("titleWarningText");
+                    if (data.count === 1) {
+                        warningText.textContent = "已有1个文档使用此标题，建议使用更具体的标题";
+                    } else {
+                        warningText.textContent = "已有" + data.count + "个文档使用此标题，建议使用更具体的标题";
+                    }
+                    warningDiv.classList.remove("hidden");
+                } else {
+                    warningDiv.classList.add("hidden");
+                }
+            } catch (error) {
+                // 检查失败时静默处理，不影响用户操作
+                console.log("Title check failed:", error);
+                warningDiv.classList.add("hidden");
+            }
+        }, 500); // 500ms延迟
+    }
+
     document.getElementById("createForm").addEventListener("submit", async function(e) {
         e.preventDefault();
         const title = document.getElementById("titleInput").value;
@@ -2122,8 +2289,14 @@ function getMainScript() {
         // 隐藏之前的错误信息
         errorDiv.classList.add("hidden");
 
-        // 验证自定义名称格式
-        if (customName && !/^[a-zA-Z0-9_-]{3,50}$/.test(customName)) {
+        // 验证文档名称（必填）
+        if (!customName || customName.trim() === '') {
+            errorDiv.textContent = "文档名称为必填项";
+            errorDiv.classList.remove("hidden");
+            return;
+        }
+
+        if (!/^[a-zA-Z0-9_-]{3,50}$/.test(customName)) {
             errorDiv.textContent = "文档名称只能包含字母、数字、连字符和下划线，长度3-50字符";
             errorDiv.classList.remove("hidden");
             return;
@@ -2144,9 +2317,8 @@ function getMainScript() {
                 accessLevel: accessLevel
             };
 
-            if (customName) {
-                requestData.customName = customName;
-            }
+            // 文档名称现在是必填的
+            requestData.customName = customName;
 
             if (password) {
                 requestData.password = password;
@@ -2172,10 +2344,17 @@ function getMainScript() {
         } catch (error) {
             const errorMessage = error.message;
             if (errorMessage.includes("文档名称已存在")) {
-                errorDiv.textContent = "文档名称已存在，请选择其他名称";
+                // 提供建议的替代名称
+                const suggestedName = customName + "-2";
+                errorDiv.innerHTML = "文档名称已存在，建议使用: <strong>" + suggestedName + "</strong>";
                 errorDiv.classList.remove("hidden");
+                // 自动填入建议名称
+                document.getElementById("customNameInput").value = suggestedName;
             } else if (errorMessage.includes("文档名称只能包含")) {
                 errorDiv.textContent = "文档名称格式不正确";
+                errorDiv.classList.remove("hidden");
+            } else if (errorMessage.includes("文档名称为必填项")) {
+                errorDiv.textContent = "请输入文档名称";
                 errorDiv.classList.remove("hidden");
             } else {
                 errorDiv.textContent = "创建文档失败: " + errorMessage;
@@ -2258,6 +2437,14 @@ function getEditHTML(docId) {
                     <div class="mb-6">
                         <label class="block text-gray-700 text-sm font-semibold mb-3">文档标题</label>
                         <input type="text" id="titleInput" class="input-modern w-full" placeholder="请输入文档标题">
+                        <div id="titleWarning" class="hidden mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
+                            <div class="flex items-center">
+                                <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                                </svg>
+                                <span id="titleWarningText"></span>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- 文档属性管理区域 -->
@@ -2546,32 +2733,28 @@ function getEditHTML(docId) {
         }
 
         function shareDocument() {
-            // 如果文档有名称，使用文档名称；否则提示用户设置文档名称
-            if (documentName) {
-                const url = window.location.origin + "/" + documentName;
+            // 所有文档现在都有名称，可以直接分享
+            const url = window.location.origin + "/" + documentName;
 
-                if (navigator.clipboard) {
-                    navigator.clipboard.writeText(url).then(function() {
-                        showMessage("分享链接已复制到剪贴板", "success");
-                    }).catch(function() {
-                        showMessage("复制失败，请手动复制: " + url, "error");
-                    });
-                } else {
-                    // 降级方案
-                    const textArea = document.createElement("textarea");
-                    textArea.value = url;
-                    document.body.appendChild(textArea);
-                    textArea.select();
-                    try {
-                        document.execCommand("copy");
-                        showMessage("分享链接已复制到剪贴板", "success");
-                    } catch (err) {
-                        showMessage("复制失败，请手动复制: " + url, "error");
-                    }
-                    document.body.removeChild(textArea);
-                }
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(url).then(function() {
+                    showMessage("分享链接已复制到剪贴板", "success");
+                }).catch(function() {
+                    showMessage("复制失败，请手动复制: " + url, "error");
+                });
             } else {
-                showMessage("此文档没有设置自定义名称，无法生成分享链接", "error");
+                // 降级方案
+                const textArea = document.createElement("textarea");
+                textArea.value = url;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand("copy");
+                    showMessage("分享链接已复制到剪贴板", "success");
+                } catch (err) {
+                    showMessage("复制失败，请手动复制: " + url, "error");
+                }
+                document.body.removeChild(textArea);
             }
         }
 
@@ -2614,7 +2797,57 @@ function getEditHTML(docId) {
 
         const titleInput = document.getElementById("titleInput");
         if (titleInput) {
-            titleInput.addEventListener("input", autoSave);
+            // 标题重名检查功能
+            let titleCheckTimeout;
+            titleInput.addEventListener("input", function() {
+                const title = this.value.trim();
+                const warningDiv = document.getElementById("titleWarning");
+
+                // 清除之前的定时器
+                if (titleCheckTimeout) {
+                    clearTimeout(titleCheckTimeout);
+                }
+
+                // 如果标题为空，隐藏警告
+                if (!title) {
+                    warningDiv.classList.add("hidden");
+                    autoSave(); // 仍然触发自动保存
+                    return;
+                }
+
+                // 延迟检查，避免频繁请求
+                titleCheckTimeout = setTimeout(async () => {
+                    try {
+                        const response = await apiCall("/api/admin/check-title", {
+                            method: "POST",
+                            body: JSON.stringify({
+                                title: title,
+                                excludeDocId: docId // 排除当前文档
+                            })
+                        });
+
+                        const data = await response.json();
+
+                        if (data.hasDuplication) {
+                            const warningText = document.getElementById("titleWarningText");
+                            if (data.count === 1) {
+                                warningText.textContent = "已有1个文档使用此标题，建议使用更具体的标题";
+                            } else {
+                                warningText.textContent = "已有" + data.count + "个文档使用此标题，建议使用更具体的标题";
+                            }
+                            warningDiv.classList.remove("hidden");
+                        } else {
+                            warningDiv.classList.add("hidden");
+                        }
+                    } catch (error) {
+                        // 检查失败时静默处理，不影响用户操作
+                        console.log("Edit page - Title check failed:", error);
+                        warningDiv.classList.add("hidden");
+                    }
+                }, 500); // 500ms延迟
+
+                autoSave(); // 触发自动保存
+            });
         }
         document.getElementById("contentInput").addEventListener("input", autoSave);
 
