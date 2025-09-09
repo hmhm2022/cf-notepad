@@ -589,6 +589,12 @@ async function handleAdminAPI(request, path, method) {
     return handleGetDocument(docId);
   }
 
+  // 文档属性管理API（必须在通用PUT路由之前）
+  if (path.startsWith('/api/admin/documents/') && path.endsWith('/properties') && method === 'PUT') {
+    const docId = decodeURIComponent(path.split('/')[4]);
+    return handleUpdateDocumentProperties(docId, request);
+  }
+
   if (path.startsWith('/api/admin/documents/') && method === 'PUT') {
     const docId = decodeURIComponent(path.split('/')[4]);
     return handleUpdateDocument(docId, request);
@@ -597,12 +603,6 @@ async function handleAdminAPI(request, path, method) {
   if (path.startsWith('/api/admin/documents/') && method === 'DELETE') {
     const docId = decodeURIComponent(path.split('/')[4]);
     return handleDeleteDocument(docId);
-  }
-
-  // 文档属性管理API
-  if (path.startsWith('/api/admin/documents/') && path.endsWith('/properties') && method === 'PUT') {
-    const docId = decodeURIComponent(path.split('/')[4]);
-    return handleUpdateDocumentProperties(docId, request);
   }
 
   return new Response(JSON.stringify({ error: 'API not found' }), {
@@ -950,10 +950,16 @@ async function handleGetDocument(docId) {
   const document = JSON.parse(docData);
   document.viewCount++;
   document.lastViewedAt = Date.now();
-  
+
   await NOTEPAD_KV.put('doc_' + docId, JSON.stringify(document));
-  
-  return new Response(JSON.stringify(document), {
+
+  // 为管理员API添加hasPassword字段
+  const responseData = {
+    ...document,
+    hasPassword: !!document.password
+  };
+
+  return new Response(JSON.stringify(responseData), {
     headers: { 'Content-Type': 'application/json' }
   });
 }
@@ -1100,7 +1106,10 @@ async function handleDeleteDocument(docId) {
 // 更新文档属性（管理员专用）
 async function handleUpdateDocumentProperties(docId, request) {
   try {
-    const { title, content, accessLevel, password, expiryDays } = await request.json();
+    console.log('handleUpdateDocumentProperties 被调用，docId:', docId);
+    const requestData = await request.json();
+    console.log('请求数据:', requestData);
+    const { title, content, accessLevel, password, expiryDays } = requestData;
 
     const docData = await NOTEPAD_KV.get('doc_' + docId);
     if (!docData) {
@@ -1127,12 +1136,18 @@ async function handleUpdateDocumentProperties(docId, request) {
 
     // 更新密码
     if (password !== undefined) {
+      console.log('更新密码 - 原密码:', document.password);
+      console.log('更新密码 - 新密码:', password);
       if (password) {
-        document.password = await hashPassword(password);
+        const newHashedPassword = await hashPassword(password);
+        console.log('更新密码 - 新哈希:', newHashedPassword);
+        document.password = newHashedPassword;
       } else {
         // 清除密码
+        console.log('更新密码 - 清除密码');
         document.password = null;
       }
+      console.log('更新密码 - 更新后密码:', document.password);
     }
 
     // 更新过期时间
@@ -1148,8 +1163,9 @@ async function handleUpdateDocumentProperties(docId, request) {
     document.updatedAt = Date.now();
 
     await NOTEPAD_KV.put('doc_' + docId, JSON.stringify(document));
+    console.log('文档已保存到KV，最终密码:', document.password);
 
-    return new Response(JSON.stringify({
+    const responseData = {
       success: true,
       document: {
         id: document.id,
@@ -1160,7 +1176,10 @@ async function handleUpdateDocumentProperties(docId, request) {
         expiresAt: document.expiresAt,
         updatedAt: document.updatedAt
       }
-    }), {
+    };
+
+    console.log('返回响应数据:', responseData);
+    return new Response(JSON.stringify(responseData), {
       headers: { 'Content-Type': 'application/json' }
     });
 
@@ -2212,9 +2231,9 @@ function getEditHTML(docId) {
             <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center py-6 gap-4">
                 <h1 class="text-3xl font-bold text-gray-900 text-center sm:text-left">编辑文档</h1>
                 <div class="flex gap-1">
-                    <button id="saveBtn" class="btn-icon btn-icon-primary" title="保存文档">
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3-3m0 0l-3 3m3-3v12"></path>
+                    <button id="saveBtn" class="btn-icon btn-icon-success" title="保存文档">
+                        <svg fill="currentColor" viewBox="0 0 24 24">
+                            <path d="m20.71 9.29l-6-6a1 1 0 0 0-.32-.21A1.1 1.1 0 0 0 14 3H6a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3v-8a1 1 0 0 0-.29-.71M9 5h4v2H9Zm6 14H9v-3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1Zm4-1a1 1 0 0 1-1 1h-1v-3a3 3 0 0 0-3-3h-4a3 3 0 0 0-3 3v3H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h1v3a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V6.41l4 4Z"/>
                         </svg>
                     </button>
                     <button id="shareBtn" class="btn-icon btn-icon-success" title="分享文档">
@@ -2222,9 +2241,9 @@ function getEditHTML(docId) {
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z"></path>
                         </svg>
                     </button>
-                    <a href="/" class="btn-icon" title="返回首页">
+                    <a href="/" class="btn-icon btn-icon-danger" title="返回首页">
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
                         </svg>
                     </a>
                 </div>
@@ -2274,8 +2293,22 @@ function getEditHTML(docId) {
                         <div class="mt-4">
                             <label class="block text-gray-700 text-sm font-semibold mb-2">访问密码</label>
                             <div class="flex gap-2">
-                                <input type="password" id="documentPasswordInput" class="input-modern flex-1" placeholder="设置文档访问密码（可选）">
-                                <button type="button" id="clearPasswordBtn" class="btn-secondary px-3 py-2 text-sm">清除密码</button>
+                                <input type="password" id="documentPasswordInput" class="input-modern flex-1 bg-gray-100 text-gray-500" placeholder="设置文档访问密码（可选）" readonly disabled>
+                                <button type="button" id="editPasswordBtn" class="btn-icon" title="修改密码">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                    </svg>
+                                </button>
+                                <button type="button" id="applyPasswordBtn" class="btn-icon btn-icon-success" title="应用密码修改" style="display: none;">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                </button>
+                                <button type="button" id="cancelPasswordBtn" class="btn-icon" title="取消密码修改" style="display: none;">
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                    </svg>
+                                </button>
                             </div>
                             <div class="text-xs text-gray-500 mt-1">
                                 仅在选择密码保护权限时需要设置
@@ -2298,6 +2331,12 @@ function getEditHTML(docId) {
         const docId = "${escapeJavaScript(docId)}";
         const utils = window.CFNotepadUtils;
         let sessionToken = utils.getSessionToken();
+
+        // 密码编辑状态管理
+        let isPasswordEditing = false;
+        let hasPassword = false;
+        let originalPasswordValue = "";
+        let pendingPassword = null; // 保存待应用的密码值
 
         // 使用公共工具函数的API调用
         async function apiCall(endpoint, options = {}) {
@@ -2324,7 +2363,24 @@ function getEditHTML(docId) {
 
                 // 加载文档属性
                 document.getElementById("accessLevelSelect").value = docData.accessLevel || "public_read";
-                document.getElementById("documentPasswordInput").value = ""; // 不显示现有密码
+
+                // 处理密码状态显示
+                hasPassword = docData.hasPassword || false;
+                const passwordInput = document.getElementById("documentPasswordInput");
+
+                // 确保输入框处于正确的disabled状态
+                passwordInput.readOnly = true;
+                passwordInput.disabled = true;
+                passwordInput.className = "input-modern flex-1 bg-gray-100 text-gray-500";
+
+                if (hasPassword) {
+                    passwordInput.placeholder = "••••••••（已设置密码）";
+                    originalPasswordValue = "••••••••";
+                } else {
+                    passwordInput.placeholder = "设置文档访问密码（可选）";
+                    originalPasswordValue = "";
+                }
+                passwordInput.value = originalPasswordValue;
 
                 // 设置过期时间
                 if (docData.expiresAt) {
@@ -2350,6 +2406,88 @@ function getEditHTML(docId) {
             }
         }
 
+        // 密码编辑模式管理
+        function enterPasswordEditMode() {
+            isPasswordEditing = true;
+            const passwordInput = document.getElementById("documentPasswordInput");
+            const editBtn = document.getElementById("editPasswordBtn");
+            const applyBtn = document.getElementById("applyPasswordBtn");
+            const cancelBtn = document.getElementById("cancelPasswordBtn");
+
+            // 切换按钮显示
+            editBtn.style.display = "none";
+            applyBtn.style.display = "inline-block";
+            cancelBtn.style.display = "inline-block";
+
+            // 启用输入框并清空内容
+            passwordInput.readOnly = false;
+            passwordInput.disabled = false;
+            passwordInput.className = "input-modern flex-1"; // 移除灰色样式
+            passwordInput.value = "";
+            passwordInput.placeholder = "输入新密码或留空清除密码";
+            passwordInput.focus();
+        }
+
+        function exitPasswordEditMode() {
+            isPasswordEditing = false;
+            const passwordInput = document.getElementById("documentPasswordInput");
+            const editBtn = document.getElementById("editPasswordBtn");
+            const applyBtn = document.getElementById("applyPasswordBtn");
+            const cancelBtn = document.getElementById("cancelPasswordBtn");
+
+            // 切换按钮显示
+            editBtn.style.display = "inline-block";
+            applyBtn.style.display = "none";
+            cancelBtn.style.display = "none";
+
+            // 禁用输入框并恢复原始状态
+            passwordInput.readOnly = true;
+            passwordInput.disabled = true;
+            passwordInput.className = "input-modern flex-1 bg-gray-100 text-gray-500"; // 恢复灰色样式
+            passwordInput.value = originalPasswordValue;
+            if (hasPassword) {
+                passwordInput.placeholder = "••••••••（已设置密码）";
+            } else {
+                passwordInput.placeholder = "设置文档访问密码（可选）";
+            }
+        }
+
+        function cancelPasswordEdit() {
+            // 取消密码编辑，清空待应用的密码
+            pendingPassword = null;
+            exitPasswordEditMode();
+            showMessage("已取消密码修改", "info");
+        }
+
+        function applyPasswordChange() {
+            const passwordInput = document.getElementById("documentPasswordInput");
+            const newPassword = passwordInput.value;
+
+            console.log("应用密码修改:", newPassword ? "设置新密码" : "清除密码");
+
+            // 保存待应用的密码值
+            pendingPassword = newPassword;
+
+            // 更新状态
+            if (newPassword) {
+                hasPassword = true;
+                originalPasswordValue = "••••••••";
+            } else {
+                hasPassword = false;
+                originalPasswordValue = "";
+            }
+
+            // 退出编辑模式并显示应用成功的消息
+            exitPasswordEditMode();
+            showMessage("密码已应用，点击保存按钮完成修改", "success");
+        }
+
+        function confirmPasswordChange() {
+            // 这个函数在保存成功后调用，用于最终确认密码修改
+            pendingPassword = null; // 清空待应用的密码
+            isPasswordEditing = false; // 确保退出编辑状态
+        }
+
         async function saveDocument() {
             const title = document.getElementById("titleInput").value;
             const content = document.getElementById("contentInput").value;
@@ -2357,24 +2495,33 @@ function getEditHTML(docId) {
             const password = document.getElementById("documentPasswordInput").value;
             const expiryDays = parseInt(document.getElementById("expirySelect").value);
 
-            // 验证密码保护文档必须设置密码
-            if ((accessLevel === "password_read" || accessLevel === "password_write") && !password) {
-                showMessage("密码保护文档必须设置访问密码", "error");
-                return;
+            // 构建请求数据
+            const requestData = {
+                title,
+                content,
+                accessLevel,
+                expiryDays
+            };
+
+            // 只在密码被编辑时包含password字段
+            if (pendingPassword !== null) {
+                console.log("保存文档时包含密码修改:", pendingPassword ? "新密码" : "清除密码");
+                requestData.password = pendingPassword;
+
+                // 验证密码保护文档必须设置密码
+                if ((accessLevel === "password_read" || accessLevel === "password_write") && !pendingPassword) {
+                    showMessage("密码保护文档必须设置访问密码", "error");
+                    return;
+                }
+            } else {
+                // 验证密码保护文档必须有密码（无论是现有的还是新设置的）
+                if ((accessLevel === "password_read" || accessLevel === "password_write") && !hasPassword) {
+                    showMessage("密码保护文档必须设置访问密码", "error");
+                    return;
+                }
             }
 
             try {
-                const requestData = {
-                    title,
-                    content,
-                    accessLevel,
-                    expiryDays
-                };
-
-                // 只有在设置了密码时才包含密码字段
-                if (password) {
-                    requestData.password = password;
-                }
 
                 const response = await apiCall(\`/api/admin/documents/\${docId}/properties\`, {
                     method: "PUT",
@@ -2383,8 +2530,11 @@ function getEditHTML(docId) {
 
                 if (response.ok) {
                     showMessage("保存成功", "success");
-                    // 清空密码输入框
-                    document.getElementById("documentPasswordInput").value = "";
+
+                    // 如果密码被修改，确认密码修改
+                    if (pendingPassword !== null) {
+                        confirmPasswordChange();
+                    }
                 } else {
                     const errorData = await response.json();
                     showMessage("保存失败: " + (errorData.error || "未知错误"), "error");
@@ -2440,11 +2590,10 @@ function getEditHTML(docId) {
         document.getElementById("saveBtn").addEventListener("click", saveDocument);
         document.getElementById("shareBtn").addEventListener("click", shareDocument);
 
-        // 清除密码按钮
-        document.getElementById("clearPasswordBtn").addEventListener("click", () => {
-            document.getElementById("documentPasswordInput").value = "";
-            showMessage("密码已清除", "info");
-        });
+        // 密码编辑按钮
+        document.getElementById("editPasswordBtn").addEventListener("click", enterPasswordEditMode);
+        document.getElementById("applyPasswordBtn").addEventListener("click", applyPasswordChange);
+        document.getElementById("cancelPasswordBtn").addEventListener("click", cancelPasswordEdit);
 
         // 访问权限变化时的提示
         document.getElementById("accessLevelSelect").addEventListener("change", function() {
