@@ -183,6 +183,204 @@ async function updateDocumentStats(docId, document) {
   }
 }
 
+// ==================== 阅后即焚功能 ====================
+
+// 检查并处理阅后即焚逻辑
+async function checkBurnAfterReading(docId, document, session) {
+  try {
+    // 如果不是阅后即焚文档，直接返回
+    if (!document.burnAfterReading) {
+      return { canAccess: true };
+    }
+
+    // 如果是管理员，不触发阅后即焚
+    if (session && session.type === PERMISSION_TYPES.ADMIN) {
+      console.log('管理员访问阅后即焚文档，不触发销毁');
+      return { canAccess: true };
+    }
+
+    // 检查是否已有锁定记录
+    const lockKey = 'burn_lock_' + docId;
+    let existingLock;
+
+    try {
+      existingLock = await NOTEPAD_KV.get(lockKey);
+    } catch (kvError) {
+      console.error('KV获取锁定记录失败:', kvError);
+      // KV操作失败时，允许访问但不创建锁定
+      return { canAccess: true };
+    }
+
+    if (existingLock) {
+      try {
+        const lockData = JSON.parse(existingLock);
+        const lockAge = Date.now() - lockData.startTime;
+
+        // 如果锁定超过30秒，清理过期文档
+        if (lockAge > 30000) {
+          console.log('阅后即焚锁定已过期，删除文档:', docId);
+          await deleteBurnDocument(docId, document);
+          return { canAccess: false, error: '文档已销毁' };
+        }
+
+        // 锁定仍然有效，拒绝访问
+        const remainingTime = Math.ceil((30000 - lockAge) / 1000);
+        return {
+          canAccess: false,
+          error: `文档正在被他人访问，请 ${remainingTime} 秒后重试`
+        };
+      } catch (parseError) {
+        console.error('解析锁定数据失败:', parseError);
+        // 解析失败时删除损坏的锁定记录
+        await NOTEPAD_KV.delete(lockKey);
+      }
+    }
+
+    // 创建新的锁定记录
+    const lockData = {
+      startTime: Date.now(),
+      docId: docId,
+      userId: session?.type || 'anonymous'
+    };
+
+    try {
+      // 设置60秒TTL，给删除操作留出时间
+      await NOTEPAD_KV.put(lockKey, JSON.stringify(lockData), { expirationTtl: 60 });
+      console.log('创建阅后即焚锁定:', docId);
+    } catch (kvError) {
+      console.error('创建锁定记录失败:', kvError);
+      // 创建锁定失败时，仍然允许访问
+    }
+
+    return { canAccess: true, burnCountdown: true };
+  } catch (error) {
+    console.error('checkBurnAfterReading函数出错:', error);
+    // 出错时允许正常访问
+    return { canAccess: true };
+  }
+}
+
+// 删除阅后即焚文档
+async function deleteBurnDocument(docId, document) {
+  try {
+    // 删除文档数据
+    await NOTEPAD_KV.delete('doc_' + docId);
+
+    // 删除名称映射
+    if (document.name) {
+      await NOTEPAD_KV.delete('name_' + document.name);
+    }
+
+    // 删除锁定记录
+    await NOTEPAD_KV.delete('burn_lock_' + docId);
+
+    console.log('阅后即焚文档已删除:', docId);
+    return true;
+  } catch (error) {
+    console.error('删除阅后即焚文档失败:', error);
+    return false;
+  }
+}
+
+// 清理过期的阅后即焚文档
+async function cleanupExpiredBurnDocs() {
+  try {
+    const lockList = await NOTEPAD_KV.list({ prefix: 'burn_lock_' });
+    const now = Date.now();
+
+    for (const key of lockList.keys) {
+      const lockData = await NOTEPAD_KV.get(key.name);
+      if (lockData) {
+        const lock = JSON.parse(lockData);
+        const lockAge = now - lock.startTime;
+
+        // 如果锁定超过30秒，删除对应文档
+        if (lockAge > 30000) {
+          const docId = lock.docId;
+          const docData = await NOTEPAD_KV.get('doc_' + docId);
+          if (docData) {
+            const document = JSON.parse(docData);
+            await deleteBurnDocument(docId, document);
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('清理过期阅后即焚文档失败:', error);
+  }
+}
+
+// 处理阅后即焚文档删除API
+async function handleBurnDocumentDelete(docId, request) {
+  try {
+    // 获取文档信息
+    const docData = await NOTEPAD_KV.get('doc_' + docId);
+    if (!docData) {
+      return new Response(JSON.stringify({ error: '文档不存在' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const document = safeJsonParse(docData);
+    if (!document) {
+      return new Response(JSON.stringify({ error: '文档数据损坏' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // 检查是否为阅后即焚文档
+    if (!document.burnAfterReading) {
+      return new Response(JSON.stringify({ error: '非阅后即焚文档' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // 检查是否有有效的锁定记录（可选验证）
+    const lockKey = 'burn_lock_' + docId;
+    const existingLock = await NOTEPAD_KV.get(lockKey);
+
+    // 如果有锁定记录，验证是否过期
+    if (existingLock) {
+      try {
+        const lockData = JSON.parse(existingLock);
+        const lockAge = Date.now() - lockData.startTime;
+
+        // 如果锁定超过60秒，认为已过期
+        if (lockAge > 60000) {
+          console.log('锁定记录已过期，但仍允许删除');
+        }
+      } catch (parseError) {
+        console.error('解析锁定数据失败:', parseError);
+      }
+    } else {
+      console.log('未找到锁定记录，但仍允许删除阅后即焚文档');
+    }
+
+    // 删除文档
+    const deleteResult = await deleteBurnDocument(docId, document);
+
+    if (deleteResult) {
+      return new Response(JSON.stringify({ success: true, message: '文档已销毁' }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } else {
+      return new Response(JSON.stringify({ error: '删除文档失败' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+  } catch (error) {
+    console.error('处理阅后即焚删除请求失败:', error);
+    return new Response(JSON.stringify({ error: '服务器内部错误' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+}
+
 // ==================== 工具函数 ====================
 
 function generateId() {
@@ -585,6 +783,12 @@ async function handleRequest(request) {
 
 // API 处理函数 - 重构版本
 async function handleAPI(request, path, method) {
+  // 阅后即焚文档删除API
+  if (path.startsWith('/api/burn-document/') && method === 'DELETE') {
+    const docId = decodeURIComponent(path.split('/')[3]);
+    return handleBurnDocumentDelete(docId, request);
+  }
+
   // 根据路径前缀分发到不同的处理器
   if (path.startsWith('/api/auth/')) {
     return handleAuthAPI(request, path, method);
@@ -819,6 +1023,7 @@ async function handleGetDocuments() {
           viewCount: doc.viewCount || 0,
           expiresAt: doc.expiresAt,
           hasPassword: !!doc.password,
+          burnAfterReading: doc.burnAfterReading || false,
           name: doc.name
         });
       }
@@ -869,7 +1074,7 @@ async function handleCheckTitle(request) {
 async function handleCreateDocument(request) {
   try {
     const requestData = await request.json();
-    const { title, content, expiryDays, customName, password, accessLevel } = requestData;
+    const { title, content, expiryDays, customName, password, accessLevel, burnAfterReading } = requestData;
 
     // 调试信息
     console.log('Create document request:', {
@@ -878,7 +1083,8 @@ async function handleCreateDocument(request) {
       expiryDays,
       customName: `"${customName}" (length: ${customName?.length})`,
       password: password ? `"${password}" (length: ${password.length})` : undefined,
-      accessLevel
+      accessLevel,
+      burnAfterReading
     });
 
     // 输入验证
@@ -1005,6 +1211,7 @@ async function handleCreateDocument(request) {
       content: sanitizeInput(content || '', 'content'),
       password: password ? await hashPassword(password) : null,
       accessLevel: finalAccessLevel,
+      burnAfterReading: burnAfterReading === true, // 新增：阅后即焚标志
       createdAt: now,
       updatedAt: now,
       lastViewedAt: now,
@@ -1051,10 +1258,11 @@ async function handleGetDocument(docId) {
 
   await NOTEPAD_KV.put('doc_' + docId, JSON.stringify(document));
 
-  // 为管理员API添加hasPassword字段
+  // 为管理员API添加hasPassword和burnAfterReading字段
   const responseData = {
     ...document,
-    hasPassword: !!document.password
+    hasPassword: !!document.password,
+    burnAfterReading: document.burnAfterReading || false
   };
 
   return new Response(JSON.stringify(responseData), {
@@ -1207,7 +1415,7 @@ async function handleUpdateDocumentProperties(docId, request) {
     console.log('handleUpdateDocumentProperties 被调用，docId:', docId);
     const requestData = await request.json();
     console.log('请求数据:', requestData);
-    const { title, content, accessLevel, password, expiryDays } = requestData;
+    const { title, content, accessLevel, password, expiryDays, burnAfterReading } = requestData;
 
     const docData = await NOTEPAD_KV.get('doc_' + docId);
     if (!docData) {
@@ -1258,6 +1466,11 @@ async function handleUpdateDocumentProperties(docId, request) {
       }
     }
 
+    // 更新阅后即焚设置
+    if (burnAfterReading !== undefined) {
+      document.burnAfterReading = burnAfterReading === true;
+    }
+
     document.updatedAt = Date.now();
 
     await NOTEPAD_KV.put('doc_' + docId, JSON.stringify(document));
@@ -1271,6 +1484,7 @@ async function handleUpdateDocumentProperties(docId, request) {
         title: document.title,
         accessLevel: document.accessLevel,
         hasPassword: !!document.password,
+        burnAfterReading: document.burnAfterReading || false,
         expiresAt: document.expiresAt,
         updatedAt: document.updatedAt
       }
@@ -1322,9 +1536,19 @@ async function handleGetDocByName(docName, request) {
     canWrite: canWrite(permission)
   };
 
-  // 如果有读取权限，返回内容
+  // 如果有读取权限，检查阅后即焚逻辑
   if (canRead(permission)) {
+    // 检查阅后即焚逻辑
+    const burnCheck = await checkBurnAfterReading(docId, document, session);
+    if (!burnCheck.canAccess) {
+      return new Response(JSON.stringify({ error: burnCheck.error }), {
+        status: burnCheck.error === '文档已销毁' ? 404 : 423,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     response.content = document.content || '';
+    response.burnCountdown = burnCheck.burnCountdown || false;
 
     // 使用通用函数更新访问统计
     await updateDocumentStats(docId, document);
@@ -1425,10 +1649,33 @@ async function handleDirectDocAccess(docName, request) {
   const session = await validateSession(request);
   const permission = await getDocumentPermission(session, document);
 
-  // 如果有读取权限，直接显示文档
+  // 如果有读取权限，检查阅后即焚逻辑
   if (canRead(permission)) {
+    // 检查阅后即焚逻辑（已添加错误处理）
+    const burnCheck = await checkBurnAfterReading(docId, document, session);
+    if (!burnCheck.canAccess) {
+      if (burnCheck.error === '文档已销毁') {
+        return new Response(get404HTML(), {
+          status: 404,
+          headers: { 'Content-Type': 'text/html' }
+        });
+      } else {
+        // 显示访问冲突页面
+        return new Response(getBurnConflictHTML(burnCheck.error), {
+          headers: { 'Content-Type': 'text/html' }
+        });
+      }
+    }
+
     // 使用通用函数更新访问统计
     await updateDocumentStats(docId, document);
+
+    // 如果是阅后即焚文档，显示倒计时页面
+    if (burnCheck.burnCountdown) {
+      return new Response(getBurnCountdownHTML(document, permission), {
+        headers: { 'Content-Type': 'text/html' }
+      });
+    }
 
     return new Response(getDirectDocHTML(document, permission), {
       headers: { 'Content-Type': 'text/html' }
@@ -1985,7 +2232,7 @@ function getMainHTML() {
                     </div>
                 </div>
 
-                <div class="mb-8">
+                <div class="mb-6">
                     <label class="block text-gray-700 text-sm font-semibold mb-3">过期时间</label>
                     <select id="expirySelect" class="input-modern w-full">
                         <option value="1">1天</option>
@@ -1993,6 +2240,18 @@ function getMainHTML() {
                         <option value="30">30天</option>
                         <option value="-1">永久</option>
                     </select>
+                </div>
+
+                <div class="mb-8">
+                    <div class="flex items-center space-x-3">
+                        <input type="checkbox" id="createBurnAfterReadingCheckbox" class="w-4 h-4 text-red-600 bg-gray-100 border-gray-300 rounded focus:ring-red-500 focus:ring-2">
+                        <label for="createBurnAfterReadingCheckbox" class="text-gray-700 text-sm font-semibold">
+                            🔥 阅后即焚
+                        </label>
+                    </div>
+                    <div class="text-xs text-gray-500 mt-1">
+                        启用后，文档被访问30秒后将自动销毁（管理员访问不触发销毁）
+                    </div>
                 </div>
 
                 <div id="createError" class="mb-6 text-red-500 text-sm hidden"></div>
@@ -2072,12 +2331,14 @@ function getMainScript() {
                 let directAccessSection = '';
                 if (doc.name) {
                     const passwordBadge = doc.hasPassword ? '<span class="ml-2 inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 border border-yellow-200">🔒 密码保护</span>' : '';
+                    const burnBadge = doc.burnAfterReading ? '<span class="ml-2 inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 border border-red-200">🔥 阅后即焚</span>' : '';
                     directAccessSection = \`
                         <div class="mb-3">
                             <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
                                 直接访问: \${escapeHtml(doc.name)}
                             </span>
                             \${passwordBadge}
+                            \${burnBadge}
                         </div>
                         <div class="mb-3">
                             <a href="/\${encodeURIComponent(doc.name)}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm underline font-medium">
@@ -2284,6 +2545,7 @@ function getMainScript() {
         const password = document.getElementById("createPasswordInput").value;
         const accessLevel = document.getElementById("accessLevelSelect").value;
         const expiryDays = parseInt(document.getElementById("expirySelect").value);
+        const burnAfterReading = document.getElementById("createBurnAfterReadingCheckbox").checked;
         const errorDiv = document.getElementById("createError");
 
         // 隐藏之前的错误信息
@@ -2314,7 +2576,8 @@ function getMainScript() {
                 title: title,
                 content: "",
                 expiryDays: expiryDays,
-                accessLevel: accessLevel
+                accessLevel: accessLevel,
+                burnAfterReading: burnAfterReading
             };
 
             // 文档名称现在是必填的
@@ -2339,6 +2602,7 @@ function getMainScript() {
             document.getElementById("accessLevelSelect").value = "public_read";
             document.getElementById("passwordSection").style.display = "none";
             document.getElementById("expirySelect").value = "7";
+            document.getElementById("createBurnAfterReadingCheckbox").checked = false;
 
             window.location.href = "/edit/" + newDoc.id;
         } catch (error) {
@@ -2501,6 +2765,19 @@ function getEditHTML(docId) {
                                 仅在选择密码保护权限时需要设置
                             </div>
                         </div>
+
+                        <!-- 阅后即焚设置 -->
+                        <div class="mt-4">
+                            <div class="flex items-center space-x-3">
+                                <input type="checkbox" id="burnAfterReadingCheckbox" class="w-4 h-4 text-red-600 bg-gray-100 border-gray-300 rounded focus:ring-red-500 focus:ring-2">
+                                <label for="burnAfterReadingCheckbox" class="text-gray-700 text-sm font-semibold">
+                                    🔥 阅后即焚
+                                </label>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">
+                                启用后，文档被访问30秒后将自动销毁（管理员访问不触发销毁）
+                            </div>
+                        </div>
                     </div>
 
                     <div class="mb-6">
@@ -2584,6 +2861,9 @@ function getEditHTML(docId) {
                 } else {
                     document.getElementById("expirySelect").value = "-1";
                 }
+
+                // 设置阅后即焚状态
+                document.getElementById("burnAfterReadingCheckbox").checked = docData.burnAfterReading || false;
 
                 // 保存文档名称用于分享功能
                 documentName = docData.name;
@@ -2681,13 +2961,15 @@ function getEditHTML(docId) {
             const accessLevel = document.getElementById("accessLevelSelect").value;
             const password = document.getElementById("documentPasswordInput").value;
             const expiryDays = parseInt(document.getElementById("expirySelect").value);
+            const burnAfterReading = document.getElementById("burnAfterReadingCheckbox").checked;
 
             // 构建请求数据
             const requestData = {
                 title,
                 content,
                 accessLevel,
-                expiryDays
+                expiryDays,
+                burnAfterReading
             };
 
             // 只在密码被编辑时包含password字段
@@ -2902,6 +3184,47 @@ function get404HTML() {
 </html>`;
 }
 
+// 阅后即焚访问冲突页面
+function getBurnConflictHTML(errorMessage) {
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>文档访问冲突 - CF Notepad</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    ${getModernStyles()}
+</head>
+<body class="bg-gradient-modern min-h-screen flex items-center justify-center p-4">
+    <div class="max-w-md w-full card-modern p-8 text-center">
+        <div class="mb-8">
+            <div class="mb-6">
+                <svg class="w-24 h-24 mx-auto text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                </svg>
+            </div>
+            <h1 class="text-3xl font-bold text-gray-800 mb-4">文档正在被访问</h1>
+            <p class="text-gray-600 text-lg">${escapeHtml(errorMessage)}</p>
+        </div>
+        <div class="space-y-4">
+            <button onclick="window.location.reload()" class="btn-base btn-primary w-full">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+                刷新重试
+            </button>
+            <a href="/" class="btn-base btn-secondary w-full">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+                </svg>
+                返回首页
+            </a>
+        </div>
+    </div>
+</body>
+</html>`;
+}
+
 // 文档密码输入页面
 function getDocPasswordHTML(docName, docTitle) {
   return `<!DOCTYPE html>
@@ -2998,6 +3321,112 @@ function getDocPasswordHTML(docName, docTitle) {
 
         // 自动聚焦密码输入框
         document.getElementById("passwordInput").focus();
+    </script>
+</body>
+</html>`;
+}
+
+// 阅后即焚倒计时页面
+function getBurnCountdownHTML(document, permission) {
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>${escapeHtml(document.title)} - CF Notepad</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    ${getModernStyles()}
+</head>
+<body class="bg-gradient-modern min-h-screen">
+    <!-- 阅后即焚警告条 -->
+    <div id="burnWarning" class="bg-red-500 text-white p-4 text-center font-semibold">
+        <div class="flex items-center justify-center space-x-2">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+            </svg>
+            <span>⚠️ 此文档为阅后即焚，将在 <span id="countdown">30</span> 秒后自动销毁</span>
+        </div>
+    </div>
+
+    <header class="bg-white shadow-lg border-b border-gray-100">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center py-6 gap-4">
+                <h1 class="text-3xl font-bold text-gray-900 text-center sm:text-left">${escapeHtml(document.title)}</h1>
+                <div class="flex gap-1">
+                    ${canWrite(permission) ? `
+                    <a href="/edit/${encodeURIComponent(document.name || document.id)}" class="btn-icon btn-icon-primary" title="编辑文档">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                        </svg>
+                    </a>
+                    ` : ''}
+                    <a href="/" class="btn-icon btn-icon-secondary" title="返回首页">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="card-modern p-8">
+            <div class="prose prose-lg max-w-none">
+                <pre class="whitespace-pre-wrap font-mono text-sm leading-relaxed bg-gray-50 p-6 rounded-lg border overflow-x-auto">${escapeHtml(document.content)}</pre>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let timeLeft = 30;
+        const countdownElement = document.getElementById('countdown');
+
+        const timer = setInterval(() => {
+            timeLeft--;
+            countdownElement.textContent = timeLeft;
+
+            if (timeLeft <= 0) {
+                clearInterval(timer);
+                document.getElementById('burnWarning').innerHTML = \`
+                    <div class="flex items-center justify-center space-x-2">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                        </svg>
+                        <span>🔥 文档正在销毁...</span>
+                    </div>
+                \`;
+
+                // 调用后端API删除文档
+                fetch('/api/burn-document/${escapeJavaScript(document.id)}', {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                }).then(() => {
+                    // 删除成功后更新显示
+                    document.getElementById('burnWarning').innerHTML = \`
+                        <div class="flex items-center justify-center space-x-2">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                            </svg>
+                            <span>🔥 文档已销毁</span>
+                        </div>
+                    \`;
+
+                    // 3秒后跳转到首页
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 3000);
+                }).catch(error => {
+                    console.error('删除文档失败:', error);
+                    // 即使删除失败也跳转到首页
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 3000);
+                });
+            }
+        }, 1000);
     </script>
 </body>
 </html>`;

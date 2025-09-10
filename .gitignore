@@ -40,6 +40,3 @@ coverage/
 tmp/
 temp/
 .cunzhi-memory/
-worker-fixed.js
-DEPLOYMENT.md
-Alpine.js前端优化计划.md
